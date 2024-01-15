@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use ckb_script::TransactionScriptsVerifier;
 use ckb_types::{
     bytes::Bytes,
     core::{Capacity, DepType, ScriptHashType, TransactionView},
@@ -11,8 +10,8 @@ use rand::{thread_rng, Rng};
 
 use misc::{
     assert_script_error, build_always_success_script, build_resolved_tx, debug_printer, gen_tx,
-    sign_tx, DummyDataLoader, EthereumConfig, TestConfig, ALWAYS_SUCCESS, CKB_INVALID_DATA,
-    ERROR_BURN, ERROR_EXCEED_SUPPLY, ERROR_NO_INFO_CELL, ERROR_SUPPLY_AMOUNT,
+    sign_tx, verify_tx, DummyDataLoader, EthereumConfig, TestConfig, ALWAYS_SUCCESS,
+    CKB_INVALID_DATA, ERROR_BURN, ERROR_EXCEED_SUPPLY, ERROR_NO_INFO_CELL, ERROR_SUPPLY_AMOUNT,
     IDENTITY_FLAGS_ETHEREUM, MAX_CYCLES, SIMPLE_UDT,
 };
 
@@ -182,11 +181,7 @@ where
     let tx = sign_tx(&mut data_loader, tx, &mut config);
     let resolved_tx = build_resolved_tx(&data_loader, &tx);
 
-    let consensus = misc::gen_consensus();
-    let tx_env = misc::gen_tx_env();
-    let mut verifier =
-        TransactionScriptsVerifier::new(&resolved_tx, &consensus, &data_loader, &tx_env);
-
+    let mut verifier = verify_tx(resolved_tx, data_loader.clone());
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
     if error_code == 0 {

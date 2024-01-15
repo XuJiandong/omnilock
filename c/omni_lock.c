@@ -1,5 +1,6 @@
 // uncomment to enable printf in CKB-VM
-// #define CKB_C_STDLIB_PRINTF
+#define CKB_C_STDLIB_PRINTF
+#define CKB_C_STDLIB_PRINTF_BUFFER_SIZE 1024
 
 // it's used by blockchain-api2.h, the behavior when panic
 #ifndef MOL2_EXIT
@@ -39,6 +40,7 @@ int ckb_exit(signed char);
 #include "omni_lock_acp.h"
 #include "omni_lock_time_lock.h"
 #include "omni_lock_supply.h"
+#include "cobuild.h"
 
 // clang-format on
 
@@ -313,26 +315,30 @@ exit:
   return err;
 }
 
-int parse_witness_lock(WitnessLockType *witness_lock) {
+int parse_witness_lock(WitnessLockType *witness_lock, mol2_cursor_t *seal) {
   int err = 0;
   witness_lock->has_signature = false;
   witness_lock->has_identity = false;
   witness_lock->has_proofs = false;
-
   bool witness_existing = false;
+  mol2_cursor_t mol_lock_bytes = {0};
 
-  WitnessArgsType witness_args;
-  err = make_witness(&witness_args);
-  CHECK(err);
-  witness_existing = witness_args.cur.size > 0;
+  if (seal) {
+    mol_lock_bytes = convert_to_rawbytes(seal);
+    witness_existing = true;
+  } else {
+    WitnessArgsType witness_args;
+    err = make_witness(&witness_args);
+    CHECK(err);
+    witness_existing = witness_args.cur.size > 0;
 
-  // witness or witness lock can be empty if owner lock without omni is used
-  if (!witness_existing) return err;
+    // witness or witness lock can be empty if owner lock without omni is used
+    if (!witness_existing) return err;
 
-  BytesOptType mol_lock = witness_args.t->lock(&witness_args);
-  if (mol_lock.t->is_none(&mol_lock)) return err;
-
-  mol2_cursor_t mol_lock_bytes = mol_lock.t->unwrap(&mol_lock);
+    BytesOptType mol_lock = witness_args.t->lock(&witness_args);
+    if (mol_lock.t->is_none(&mol_lock)) return err;
+    mol_lock_bytes = mol_lock.t->unwrap(&mol_lock);
+  }
   // convert Bytes to OmniLockWitnessLock
   OmniLockWitnessLockType mol_witness_lock =
       make_OmniLockWitnessLock(&mol_lock_bytes);
@@ -396,8 +402,22 @@ int main() {
   // args (args.id)
   CkbIdentityType identity = {0};
 
-  err = parse_witness_lock(&witness_lock);
+  mol2_cursor_t seal = {0};
+  /*
+   * When it fails, WitnessArgs is used. No cobuild enabled.
+   */
+  err = ckb_parse_message(g_cobuild_signing_message_hash, &seal);
+  if (err) {
+    printf("cobuild disabled");
+    g_cobuild_enabled = false;
+    err = parse_witness_lock(&witness_lock, NULL);
+  } else {
+    printf("cobuild enabled");
+    g_cobuild_enabled = true;
+    err = parse_witness_lock(&witness_lock, &seal);
+  }
   CHECK(err);
+  printf("parse_witness_lock done");
 
   err = parse_args(&args);
   CHECK(err);
