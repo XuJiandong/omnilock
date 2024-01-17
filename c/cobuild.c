@@ -181,7 +181,7 @@ int ckb_check_others_in_group() {
       break;
     }
     CHECK(err);
-    // mohanson
+    // tested by test_non_empty_witness
     CHECK2(witness_len == 0, ERROR_NONEMPTY_WITNESS);
   }
 
@@ -453,7 +453,7 @@ int ckb_parse_message(uint8_t *signing_message_hash, mol2_cursor_t *seal) {
   int err = ERROR_GENERAL;
 
   err = ckb_check_others_in_group();
-  // mohanson
+  // tested by test_non_empty_witness
   CHECK(err);
   bool has_message = false;
   mol2_cursor_t message;

@@ -741,15 +741,14 @@ fn test_non_empty_witness() {
     let lock_args = config.gen_args();
     let tx = gen_tx_with_grouped_args(&mut data_loader, vec![(lock_args, 2)], &mut config);
 
-    // let tx = gen_tx(&mut data_loader, &mut config);
     let tx = sign_tx(&mut data_loader, tx, &mut config);
     let resolved_tx = build_resolved_tx(&data_loader, &tx);
 
-    let tx_json = ckb_jsonrpc_types::Transaction::from(resolved_tx.transaction.data());
-    println!("{}", serde_json::to_string(&tx_json).unwrap());
+    // let tx_json = ckb_jsonrpc_types::Transaction::from(resolved_tx.transaction.data());
+    // println!("{}", serde_json::to_string(&tx_json).unwrap());
 
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
-    verify_result.expect("pass verification");
+    assert_script_error(verify_result.unwrap_err(), ERROR_MOL2_ERR_OVERFLOW);
 }

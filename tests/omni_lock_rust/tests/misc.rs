@@ -81,6 +81,7 @@ pub const ERROR_RCE_EMERGENCY_HALT: i8 = 54;
 pub const ERROR_RSA_VERIFY_FAILED: i8 = 42;
 pub const ERROR_INCORRECT_SINCE_VALUE: i8 = -24;
 pub const ERROR_ISO97962_INVALID_ARG9: i8 = 61;
+pub const ERROR_MOL2_ERR_OVERFLOW: i8 = 8;
 // sudt supply errors
 pub const ERROR_EXCEED_SUPPLY: i8 = 90;
 pub const ERROR_SUPPLY_AMOUNT: i8 = 91;
