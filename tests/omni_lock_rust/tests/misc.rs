@@ -622,7 +622,7 @@ pub fn sign_tx_by_input_group(
     let mut preimage_hash: Bytes = Default::default();
 
     let message = if config.cobuild_enabled {
-        cobuild_generate_signing_message_hash(&Some(config.cobuild_message.clone()), &tx)
+        cobuild_generate_signing_message_hash(&Some(config.cobuild_message.clone()), dummy, &tx)
     } else {
         let mut blake2b = ckb_hash::new_blake2b();
         let mut message = [0u8; 32];
@@ -2103,6 +2103,7 @@ fn test_gen_sign_msg() {
 
 pub fn cobuild_generate_signing_message_hash(
     message: &Option<Message>,
+    data_loader: &mut DummyDataLoader,
     tx: &TransactionView,
 ) -> [u8; 32] {
     let mut count = 0;
@@ -2125,11 +2126,12 @@ pub fn cobuild_generate_signing_message_hash(
         let input_cell = tx.inputs().get(i).unwrap();
         hasher.update(&input_cell.as_slice());
         count += input_cell.as_slice().len();
-        let input_cell_data = tx.outputs_data().get(i).unwrap();
+        let input_cell_out_point = input_cell.previous_output();
+        let (_, input_cell_data) = data_loader.cells.get(&input_cell_out_point).unwrap();
         hasher.update(&(input_cell_data.len() as u32).to_le_bytes());
         count += 4;
-        hasher.update(&input_cell_data.raw_data());
-        count += input_cell_data.raw_data().len();
+        hasher.update(input_cell_data);
+        count += input_cell_data.len();
     }
     // extra witnesses
     for witness in tx.witnesses().into_iter().skip(inputs_len) {
