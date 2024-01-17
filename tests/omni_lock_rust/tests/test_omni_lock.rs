@@ -726,3 +726,30 @@ fn test_try_union_unpack_id_by_cobuild() {
     let verify_result = verifier.verify(MAX_CYCLES);
     verify_result.expect("pass verification");
 }
+
+#[test]
+fn test_non_empty_witness() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_BITCOIN, false);
+    config.cobuild_enabled = true;
+    config.set_chain_config(Box::new(BitcoinConfig {
+        sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
+        pubkey_err: false,
+    }));
+
+    let lock_args = config.gen_args();
+    let tx = gen_tx_with_grouped_args(&mut data_loader, vec![(lock_args, 2)], &mut config);
+
+    // let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let tx_json = ckb_jsonrpc_types::Transaction::from(resolved_tx.transaction.data());
+    println!("{}", serde_json::to_string(&tx_json).unwrap());
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
