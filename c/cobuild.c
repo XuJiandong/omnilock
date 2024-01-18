@@ -354,6 +354,7 @@ int ckb_fetch_seal(mol2_cursor_t *seal_cursor) {
     table SighashAllOnly {
       seal: Bytes,
     }
+    tested by test_sighash_all_only
   */
     mol2_union_t uni = mol2_union_unpack(&cursor);
     *seal_cursor = mol2_table_slice_by_index(&uni.cursor, 0);

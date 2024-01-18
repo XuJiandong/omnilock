@@ -931,3 +931,25 @@ fn test_wrong_union_id() {
     let verify_result = verifier.verify(MAX_CYCLES);
     assert_script_error(verify_result.unwrap_err(), ERROR_MOL2_ERR_OVERFLOW);
 }
+
+#[test]
+fn test_sighash_all_only() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_BITCOIN, false);
+    config.cobuild_enabled = true;
+    config.cobuild_message = None;
+    config.set_chain_config(Box::new(BitcoinConfig {
+        sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
+        pubkey_err: false,
+    }));
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}

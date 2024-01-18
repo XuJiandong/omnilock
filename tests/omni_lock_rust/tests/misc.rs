@@ -43,7 +43,7 @@ use ckb_script::TransactionScriptsVerifier;
 use ckb_types::core::hardfork::HardForks;
 use omni_lock_test::omni_lock;
 use omni_lock_test::omni_lock::OmniLockWitnessLock;
-use omni_lock_test::schemas::basic::{Message, SighashAll};
+use omni_lock_test::schemas::basic::{Message, SighashAll, SighashAllOnly};
 use omni_lock_test::xudt_rce_mol::{
     RCCellVecBuilder, RCDataBuilder, RCDataUnion, RCRuleBuilder, SmtProofBuilder,
     SmtProofEntryBuilder, SmtProofEntryVec, SmtProofEntryVecBuilder,
@@ -623,7 +623,7 @@ pub fn sign_tx_by_input_group(
     let mut preimage_hash: Bytes = Default::default();
 
     let message = if config.cobuild_enabled {
-        cobuild_generate_signing_message_hash(&Some(config.cobuild_message.clone()), dummy, &tx)
+        cobuild_generate_signing_message_hash(&config.cobuild_message, dummy, &tx)
     } else {
         let mut blake2b = ckb_hash::new_blake2b();
         let mut message = [0u8; 32];
@@ -752,21 +752,40 @@ pub fn sign_tx_by_input_group(
                 );
 
                 if config.cobuild_enabled {
-                    let msg = config.cobuild_message.clone();
-                    let sighash_all = SighashAll::new_builder()
-                        .message(msg)
-                        .seal(witness_lock.pack())
-                        .build();
-                    let sighash_all = WitnessLayout::new_builder().set(sighash_all).build();
-                    let sighash_all = sighash_all.as_bytes();
-                    println!(
-                        "sighash_all with enum id(size: {}): {:02x?}",
-                        sighash_all.len(),
-                        sighash_all.as_ref()
-                    );
-                    let res = sighash_all.pack();
-                    println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
-                    res
+                    match &config.cobuild_message {
+                        Some(msg) => {
+                            let sighash_all = SighashAll::new_builder()
+                                .message(msg.clone())
+                                .seal(witness_lock.pack())
+                                .build();
+                            let sighash_all = WitnessLayout::new_builder().set(sighash_all).build();
+                            let sighash_all = sighash_all.as_bytes();
+                            println!(
+                                "sighash_all with enum id(size: {}): {:02x?}",
+                                sighash_all.len(),
+                                sighash_all.as_ref()
+                            );
+                            let res = sighash_all.pack();
+                            println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
+                            res
+                        }
+                        None => {
+                            let sighash_all_only = SighashAllOnly::new_builder()
+                                .seal(witness_lock.pack())
+                                .build();
+                            let sighash_all_only =
+                                WitnessLayout::new_builder().set(sighash_all_only).build();
+                            let sighash_all_only = sighash_all_only.as_bytes();
+                            println!(
+                                "sighash_all_only with enum id(size: {}): {:02x?}",
+                                sighash_all_only.len(),
+                                sighash_all_only.as_ref()
+                            );
+                            let res = sighash_all_only.pack();
+                            println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
+                            res
+                        }
+                    }
                 } else {
                     let witness = WitnessArgs::new_unchecked(
                         tx.witnesses().get(begin_index).unwrap().unpack(),
@@ -1494,7 +1513,7 @@ pub struct TestConfig {
 
     pub chain_config: Option<Box<dyn ChainConfig>>,
     pub cobuild_enabled: bool,
-    pub cobuild_message: Message,
+    pub cobuild_message: Option<Message>,
     pub custom_extension_witnesses: Option<Vec<Bytes>>,
 }
 
@@ -1595,7 +1614,7 @@ impl TestConfig {
 
             chain_config: None,
             cobuild_enabled: false,
-            cobuild_message: Message::default(),
+            cobuild_message: Some(Message::default()),
             custom_extension_witnesses: None,
         }
     }
