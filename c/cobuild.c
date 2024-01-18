@@ -360,8 +360,8 @@ int ckb_fetch_seal(mol2_cursor_t *seal_cursor) {
   } else {
     // the union id should be SighashAll or SighashAllOnly. otherwise, it fails
     // and mark it as non cobuild.
-    // mohanson
-    printf("error in fetch_seal, id = %d", id);
+    // tested by test_wrong_union_id
+    printf("error in fetch_seal, id = %u", id);
     CHECK2(false, ERROR_SIGHASHALL_NOSEAL);
   }
 
@@ -381,7 +381,7 @@ int ckb_generate_signing_message_hash(bool has_message,
   size_t count = 0;
   // use different hash based on message
   if (has_message) {
-    // mohanson
+    // tested by test_input_cell_data_size_0
     new_sighash_all_blake2b(&ctx);
     ckb_hash_cursor(&ctx, message_cursor);
     count += message_cursor.size;

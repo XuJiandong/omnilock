@@ -805,7 +805,6 @@ fn test_input_cell_data_size_1() {
     verify_result.expect("pass verification");
 }
 
-
 #[test]
 fn test_input_cell_data_size_2048() {
     let mut data_loader = DummyDataLoader::new();
@@ -887,7 +886,10 @@ fn test_input_cell_data_size_500k() {
         let (input_cell_output, _) = data_loader.cells.get(&input_cell_out_point).unwrap();
         data_loader.cells.insert(
             input_cell_out_point,
-            (input_cell_output.clone(), Bytes::from(vec![0x42; 500 * 1024])),
+            (
+                input_cell_output.clone(),
+                Bytes::from(vec![0x42; 500 * 1024]),
+            ),
         );
     }
     let tx = sign_tx(&mut data_loader, tx, &mut config);
@@ -897,4 +899,35 @@ fn test_input_cell_data_size_500k() {
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
     verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_wrong_union_id() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_BITCOIN, false);
+    config.cobuild_enabled = true;
+    config.set_chain_config(Box::new(BitcoinConfig {
+        sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
+        pubkey_err: false,
+    }));
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+
+    let witness = tx.witnesses().get(0).unwrap();
+    let mut witness_builder = witness.as_builder();
+    witness_builder.replace(0, 0x03.into());
+    let witness = witness_builder.build();
+    let tx = tx
+        .as_advanced_builder()
+        .set_witnesses(vec![witness])
+        .build();
+
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert_script_error(verify_result.unwrap_err(), ERROR_MOL2_ERR_OVERFLOW);
 }
