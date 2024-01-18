@@ -257,7 +257,11 @@ exit:
 
 int ckb_hash_cursor(blake2b_state *ctx, mol2_cursor_t cursor) {
   // one batch to drain whole cache perfectly
-  // mohanson: cell data, 0, 1, 2048, 2049, 500k
+  // tested by test_input_cell_data_size_0
+  //           test_input_cell_data_size_1
+  //           test_input_cell_data_size_2048
+  //           test_input_cell_data_size_2049
+  //           test_input_cell_data_size_500k
   uint8_t batch[MAX_CACHE_SIZE];
   while (true) {
     uint32_t read_len = mol2_read_at(&cursor, batch, sizeof(batch));
