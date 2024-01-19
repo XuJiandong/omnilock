@@ -732,7 +732,6 @@ fn tested_by_append_witnessed_less_than_4() {
     verify_result.expect("pass verification");
 }
 
-
 #[test]
 fn test_non_empty_witness() {
     let mut data_loader = DummyDataLoader::new();
@@ -957,7 +956,6 @@ fn test_sighash_all_only() {
     verify_result.expect("pass verification");
 }
 
-
 #[test]
 fn tested_by_append_witnessargs() {
     let mut data_loader = DummyDataLoader::new();
@@ -1040,7 +1038,6 @@ fn tested_by_sighashall_dup() {
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
     assert_script_error(verify_result.unwrap_err(), MOL2_ERR_OVERFLOW);
-    //
 }
 
 #[test]
@@ -1096,5 +1093,45 @@ fn tested_by_insert_witness_less_4_before_sighashall() {
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
     verify_result.unwrap_err();
-    //
+}
+
+#[test]
+fn test_big_message() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_BITCOIN, false);
+    config.cobuild_enabled = true;
+
+    let mut action_vec = Vec::<Action>::new();
+    for _ in 0..1024 {
+        let action_builder = Action::new_builder();
+        let action_builder = action_builder.script_info_hash(
+            ckb_types::packed::Byte32::new_unchecked(Bytes::from(vec![0x00; 32])),
+        );
+        let action_builder = action_builder.script_hash(ckb_types::packed::Byte32::new_unchecked(
+            Bytes::from(vec![0x00; 32]),
+        ));
+        let action_builder = action_builder.data(ckb_types::packed::Bytes::new_unchecked(
+            Bytes::from(vec![0x42; 128]),
+        ));
+        let action = action_builder.build();
+        action_vec.push(action);
+    }
+    let action_vec = ActionVec::new_builder().extend(action_vec).build();
+    let message = Message::new_builder().actions(action_vec).build();
+    config.cobuild_message = Some(message);
+
+    config.set_chain_config(Box::new(BitcoinConfig {
+        sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
+        pubkey_err: false,
+    }));
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
 }
