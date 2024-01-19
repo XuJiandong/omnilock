@@ -677,7 +677,7 @@ fn test_binary_unchanged() {
 
     let actual_hash = faster_hex::hex_string(&hash);
     assert_eq!(
-        "eb9483b29855bdafcad85595f02644f548e9094c24d544eeb51cd26ee2ecf14a",
+        "41511e84d1e3b28ccdf0660edb4573494129c218d026e42e62bef81648726b6b",
         &actual_hash
     );
 }
@@ -743,9 +743,6 @@ fn test_non_empty_witness() {
 
     let tx = sign_tx(&mut data_loader, tx, &mut config);
     let resolved_tx = build_resolved_tx(&data_loader, &tx);
-
-    // let tx_json = ckb_jsonrpc_types::Transaction::from(resolved_tx.transaction.data());
-    // println!("{}", serde_json::to_string(&tx_json).unwrap());
 
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
