@@ -1103,7 +1103,7 @@ fn test_big_message() {
     config.cobuild_enabled = true;
 
     let mut action_vec = Vec::<Action>::new();
-    for _ in 0..1024 {
+    for _ in 0..3072 {
         let action_builder = Action::new_builder();
         let action_builder = action_builder.script_info_hash(
             ckb_types::packed::Byte32::new_unchecked(Bytes::from(vec![0x00; 32])),
@@ -1119,7 +1119,7 @@ fn test_big_message() {
     }
     let action_vec = ActionVec::new_builder().extend(action_vec).build();
     let message = Message::new_builder().actions(action_vec).build();
-    config.cobuild_message = Some(message);
+    config.cobuild_message = Some(message); // Message is 651300 bytes in molecule type.
 
     config.set_chain_config(Box::new(BitcoinConfig {
         sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
