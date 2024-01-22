@@ -63,7 +63,7 @@ enum IdentityFlagsType {
   IdentityFlagsCkb = 0,
   // values 1~5 are used by pw-lock
   IdentityFlagsEthereum = 1,
-  IdentityFlagsEos = 2,
+  // EOS = 2, disabled
   IdentityFlagsTron = 3,
   IdentityFlagsBitcoin = 4,
   IdentityFlagsDogecoin = 5,
@@ -349,29 +349,6 @@ int validate_signature_btc(void *prefilled_data, const uint8_t *sig,
   *output_len = AUTH160_SIZE;
 
   return 0;
-}
-
-int validate_signature_eos(void *prefilled_data, const uint8_t *sig,
-                           size_t sig_len, const uint8_t *msg, size_t msg_len,
-                           uint8_t *output, size_t *output_len) {
-  int err = 0;
-  if (*output_len < AUTH160_SIZE) {
-    return ERROR_INVALID_ARG;
-  }
-  uint8_t out_pubkey[UNCOMPRESSED_SECP256K1_PUBKEY_SIZE];
-  size_t out_pubkey_size = UNCOMPRESSED_SECP256K1_PUBKEY_SIZE;
-  err = _recover_secp256k1_pubkey_btc(sig, sig_len, msg, msg_len, out_pubkey,
-                                      &out_pubkey_size);
-  if (err) return err;
-
-  blake2b_state ctx;
-  blake2b_init(&ctx, BLAKE2B_BLOCK_SIZE);
-  blake2b_update(&ctx, out_pubkey, out_pubkey_size);
-  blake2b_final(&ctx, out_pubkey, BLAKE2B_BLOCK_SIZE);
-
-  memcpy(output, out_pubkey, AUTH160_SIZE);
-  *output_len = AUTH160_SIZE;
-  return err;
 }
 
 int generate_sighash_all(uint8_t *msg, size_t msg_len) {
@@ -931,12 +908,6 @@ int ckb_verify_identity(CkbIdentityType *id, uint8_t *sig, uint32_t sig_size,
     }
     return verify_sighash_all(id->id, sig, sig_size, validate_signature_eth,
                               convert_eth_message_displaying);
-  } else if (id->flags == IdentityFlagsEos) {
-    if (sig == NULL || sig_size != SECP256K1_SIGNATURE_SIZE) {
-      return ERROR_IDENTITY_WRONG_ARGS;
-    }
-    return verify_sighash_all(id->id, sig, sig_size, validate_signature_eos,
-                              convert_copy);
   } else if (id->flags == IdentityFlagsTron) {
     if (sig == NULL || sig_size != SECP256K1_SIGNATURE_SIZE) {
       return ERROR_IDENTITY_WRONG_ARGS;

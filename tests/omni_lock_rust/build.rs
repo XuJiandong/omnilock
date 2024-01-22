@@ -12,12 +12,10 @@ const PATH_PREFIX: &str = "../../build/";
 const BUF_SIZE: usize = 8 * 1024;
 const CKB_HASH_PERSONALIZATION: &[u8] = b"ckb-default-hash";
 
-const BINARIES: &[(&str, &str)] = &[
-    (
-        "omni_lock",
-        "768f306681da232ceb0b94f436c5f813377179762a831c5ad8797bd4fd2d118d",
-    ),
-];
+const BINARIES: &[(&str, &str)] = &[(
+    "omni_lock",
+    "eb2ab5fd9a1dab4354a76ee2765e6a9ac2d94d927da39fb72b1691ea523e4613",
+)];
 
 fn main() {
     let mut bundled = includedir_codegen::start("BUNDLED_CELL");

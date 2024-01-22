@@ -608,7 +608,7 @@ fn test_dogecoin_err_pubkey() {
     assert!(verify_result.is_err())
 }
 
-fn test_eos_success(vtype: u8) {
+fn test_eos_fail(vtype: u8) {
     let mut data_loader = DummyDataLoader::new();
 
     let mut config = TestConfig::new(IDENTITY_FLAGS_EOS, false);
@@ -627,7 +627,8 @@ fn test_eos_success(vtype: u8) {
 
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
-    verify_result.expect("pass verification");
+    assert!(verify_result.is_err());
+    assert_script_error(verify_result.unwrap_err(), CKB_INVALID_DATA);
 }
 
 fn test_eos_err_pubkey(vtype: u8) {
@@ -651,11 +652,11 @@ fn test_eos_err_pubkey(vtype: u8) {
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
     assert!(verify_result.is_err());
-    assert_script_error(verify_result.unwrap_err(), ERROR_PUBKEY_BLAKE160_HASH);
+    assert_script_error(verify_result.unwrap_err(), CKB_INVALID_DATA);
 }
 
 fn test_eos(vtype: u8) {
-    test_eos_success(vtype);
+    test_eos_fail(vtype);
     test_eos_err_pubkey(vtype)
 }
 
