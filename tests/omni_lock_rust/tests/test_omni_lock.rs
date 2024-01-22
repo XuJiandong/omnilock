@@ -1135,3 +1135,122 @@ fn test_big_message() {
     let verify_result = verifier.verify(MAX_CYCLES);
     verify_result.expect("pass verification");
 }
+
+#[test]
+fn test_cobuild_simple_owner_lock() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_OWNER_LOCK, false);
+    config.cobuild_enabled = true;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_cobuild_simple_owner_lock_mismatched() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_OWNER_LOCK, false);
+    config.cobuild_enabled = true;
+    config.scheme = TestScheme::OwnerLockMismatched;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert_script_error(verify_result.unwrap_err(), ERROR_LOCK_SCRIPT_HASH_NOT_FOUND)
+}
+
+#[test]
+fn test_cobuild_owner_lock_on_wl() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_OWNER_LOCK, true);
+    config.cobuild_enabled = true;
+    config.scheme = TestScheme::OnWhiteList;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_cobuild_owner_lock_on_wl_without_witness() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_OWNER_LOCK, true);
+    config.cobuild_enabled = true;
+    config.scheme = TestScheme::OnWhiteList;
+    config.scheme2 = TestScheme2::NoWitness;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert!(verify_result.is_err());
+}
+
+#[test]
+fn test_cobuild_rsa_via_dl_unlock_with_time_lock() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let args_since = 0x2000_0000_0000_0000u64 + 200;
+    let input_since = 0x2000_0000_0000_0000u64 + 200;
+    let mut config = TestConfig::new(IDENTITY_FLAGS_DL, false);
+    config.cobuild_enabled = true;
+    config.set_rsa();
+    config.set_since(args_since, input_since);
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_cobuild_rsa_via_dl_unlock_with_time_lock_failed() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let args_since = 0x2000_0000_0000_0000u64 + 200;
+    let input_since = 0x2000_0000_0000_0000u64 + 100;
+    let mut config = TestConfig::new(IDENTITY_FLAGS_DL, false);
+    config.cobuild_enabled = true;
+    config.set_rsa();
+    config.set_since(args_since, input_since);
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+
+    assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_VALUE);
+}
