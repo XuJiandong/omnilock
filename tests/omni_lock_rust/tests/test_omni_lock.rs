@@ -1254,3 +1254,127 @@ fn test_cobuild_rsa_via_dl_unlock_with_time_lock_failed() {
 
     assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_VALUE);
 }
+
+#[test]
+fn tested_by_append_witnessargs_acp() {
+    let mut data_loader: DummyDataLoader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_BITCOIN, false);
+    config.cobuild_enabled = true;
+    config.set_chain_config(Box::new(BitcoinConfig {
+        sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
+        pubkey_err: false,
+    }));
+    config.set_acp_config(Some((0, 0)));
+
+    config.custom_extension_witnesses = Some(vec![WitnessArgsBuilder::default()
+        .lock(Some(Bytes::from([0u8; 65].to_vec())).pack())
+        .build()
+        .as_bytes()]);
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn tested_by_append_witnessargs_since() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_BITCOIN, false);
+    config.cobuild_enabled = true;
+    config.set_chain_config(Box::new(BitcoinConfig {
+        sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
+        pubkey_err: false,
+    }));
+
+    let args_since = 0x2000_0000_0000_0000u64 + 200;
+    let input_since = 0x2000_0000_0000_0000u64 + 200;
+    config.set_since(args_since, input_since);
+
+    config.custom_extension_witnesses = Some(vec![WitnessArgsBuilder::default()
+        .lock(Some(Bytes::from([0u8; 65].to_vec())).pack())
+        .build()
+        .as_bytes()]);
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn tested_by_append_other_witnesslayout_acp() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_BITCOIN, false);
+    config.cobuild_enabled = true;
+    config.set_chain_config(Box::new(BitcoinConfig {
+        sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED,
+        pubkey_err: false,
+    }));
+    config.set_acp_config(Some((0, 0)));
+
+    config.custom_extension_witnesses = Some(vec![WitnessLayoutBuilder::default()
+        .set(WitnessLayoutUnion::SighashAllOnly(
+            SighashAllOnlyBuilder::default()
+                .seal(Bytes::from([0u8; 32].to_vec()).pack())
+                .build(),
+        ))
+        .build()
+        .as_bytes()]);
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_cobuild_eth_unlock() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_ETHEREUM, false);
+    config.cobuild_enabled = true;
+    config.set_chain_config(Box::new(EthereumConfig::default()));
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_cobuild_eth_displaying_unlock() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_ETHEREUM_DISPLAYING, false);
+    config.cobuild_enabled = true;
+    config.set_chain_config(Box::new(EthereumDisplayConfig::default()));
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
