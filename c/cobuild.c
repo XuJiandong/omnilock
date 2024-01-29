@@ -577,6 +577,7 @@ int ckb_parse_message(uint8_t *signing_message_hash, mol2_cursor_t *seal) {
   mol2_add_offset(seal, prefix_length);
   mol2_sub_size(seal, prefix_length);
   mol2_validate(seal);
+  printf("message calculation flow type %d\n", prefix[MOL2_NUM_T_SIZE]);
 
   if (prefix[MOL2_NUM_T_SIZE] == MessageCalculationFlowBlake2b) {
     // step 8.g
