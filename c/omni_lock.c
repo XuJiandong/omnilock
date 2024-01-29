@@ -32,6 +32,7 @@ int ckb_exit(signed char);
 #undef CHECK
 #include "rce.h"
 #include "omni_lock_mol2.h"
+#include "cobuild_basic_mol2.h"
 
 #include "omni_lock_acp.h"
 #include "omni_lock_time_lock.h"
