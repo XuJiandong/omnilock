@@ -546,25 +546,31 @@ int ckb_parse_message(uint8_t *signing_message_hash, mol2_cursor_t *seal) {
   uint32_t prefix_length = 1 + MOL2_NUM_T_SIZE;
   uint8_t prefix[1 + MOL2_NUM_T_SIZE] = {0};
 
-  err = ckb_check_others_in_group();
-  // tested by test_non_empty_witness
-  CHECK(err);
   bool has_message = false;
   mol2_cursor_t message;
   // the message cursor requires longer lifetime of data_source
   uint8_t data_source[DEFAULT_DATA_SOURCE_LENGTH];
+  // step 8.a, 8.b
   err = ckb_fetch_message(&has_message, &message, data_source, MAX_CACHE_SIZE);
   CHECK(err);
   if (has_message) {
     print_cursor("message", message);
+    // step 8.c
     err = check_type_script_existing(message);
     CHECK(err);
   }
 
+  // step 8.d
   err = ckb_fetch_seal(seal);
   CHECK(err);
   print_cursor("seal", *seal);
 
+  // step 8.e
+  err = ckb_check_others_in_group();
+  // tested by test_non_empty_witness
+  CHECK(err);
+
+  // step 8.f
   // support more message calculation flows base on the first byte of seal
   uint32_t len = mol2_read_at(seal, prefix, prefix_length);
   CHECK2(len == prefix_length, ERROR_SEAL);
@@ -573,11 +579,15 @@ int ckb_parse_message(uint8_t *signing_message_hash, mol2_cursor_t *seal) {
   mol2_validate(seal);
 
   if (prefix[MOL2_NUM_T_SIZE] == MessageCalculationFlowBlake2b) {
+    // step 8.g
     err = ckb_generate_signing_message_hash(has_message, message,
                                             signing_message_hash);
     CHECK(err);
-    print_raw_data("signing_message_hash", signing_message_hash, 32);
+    print_raw_data("signing_message_hash", signing_message_hash,
+                   BLAKE2B_BLOCK_SIZE);
   } else {
+    // we can add more message calculation flows in the further, based on the
+    // first byte of seal
     CHECK2(false, ERROR_FLOW);
   }
 
