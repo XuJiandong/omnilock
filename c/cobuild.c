@@ -543,6 +543,9 @@ exit:
 
 int ckb_parse_message(uint8_t *signing_message_hash, mol2_cursor_t *seal) {
   int err = ERROR_GENERAL;
+  uint32_t prefix_length = 1 + MOL2_NUM_T_SIZE;
+  uint8_t prefix[1 + MOL2_NUM_T_SIZE] = {0};
+
   err = ckb_check_others_in_group();
   // tested by test_non_empty_witness
   CHECK(err);
@@ -563,15 +566,13 @@ int ckb_parse_message(uint8_t *signing_message_hash, mol2_cursor_t *seal) {
   print_cursor("seal", *seal);
 
   // support more message calculation flows base on the first byte of seal
-  uint8_t message_calculation_flow = 0;
-  uint32_t flow_length = 1;
-  uint32_t len = mol2_read_at(seal, &message_calculation_flow, flow_length);
-  CHECK2(len == flow_length, ERROR_SEAL);
-  mol2_add_offset(seal, flow_length);
-  mol2_sub_size(seal, flow_length);
+  uint32_t len = mol2_read_at(seal, prefix, prefix_length);
+  CHECK2(len == prefix_length, ERROR_SEAL);
+  mol2_add_offset(seal, prefix_length);
+  mol2_sub_size(seal, prefix_length);
   mol2_validate(seal);
 
-  if (message_calculation_flow == MessageCalculationFlowBlake2b) {
+  if (prefix[MOL2_NUM_T_SIZE] == MessageCalculationFlowBlake2b) {
     err = ckb_generate_signing_message_hash(has_message, message,
                                             signing_message_hash);
     CHECK(err);
