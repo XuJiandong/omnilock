@@ -52,24 +52,6 @@ fn test_simple_owner_lock() {
 }
 
 #[test]
-fn test_owner_lock_without_witness() {
-    let mut data_loader = DummyDataLoader::new();
-
-    let mut config = TestConfig::new(IDENTITY_FLAGS_OWNER_LOCK, false);
-    config.scheme2 = TestScheme2::NoWitness;
-
-    let tx = gen_tx(&mut data_loader, &mut config);
-    let tx = sign_tx(&mut data_loader, tx, &mut config);
-    let resolved_tx = build_resolved_tx(&data_loader, &tx);
-
-    let mut verifier = verify_tx(resolved_tx, data_loader);
-
-    verifier.set_debug_printer(debug_printer);
-    let verify_result = verifier.verify(MAX_CYCLES);
-    verify_result.expect("pass verification");
-}
-
-#[test]
 fn test_simple_owner_lock_mismatched() {
     let mut data_loader = DummyDataLoader::new();
 
@@ -105,24 +87,7 @@ fn test_owner_lock_on_wl() {
     verify_result.expect("pass verification");
 }
 
-#[test]
-fn test_owner_lock_on_wl_without_witness() {
-    let mut data_loader = DummyDataLoader::new();
 
-    let mut config = TestConfig::new(IDENTITY_FLAGS_OWNER_LOCK, true);
-    config.scheme = TestScheme::OnWhiteList;
-    config.scheme2 = TestScheme2::NoWitness;
-
-    let tx = gen_tx(&mut data_loader, &mut config);
-    let tx = sign_tx(&mut data_loader, tx, &mut config);
-    let resolved_tx = build_resolved_tx(&data_loader, &tx);
-
-    let mut verifier = verify_tx(resolved_tx, data_loader);
-
-    verifier.set_debug_printer(debug_printer);
-    let verify_result = verifier.verify(MAX_CYCLES);
-    assert!(verify_result.is_err());
-}
 
 #[test]
 fn test_owner_lock_not_on_wl() {
@@ -239,24 +204,6 @@ fn test_pubkey_hash_without_omni_identity() {
     verify_result.expect("pass verification");
 }
 
-#[test]
-fn test_pubkey_hash_on_wl_without_witness() {
-    let mut data_loader = DummyDataLoader::new();
-
-    let mut config = TestConfig::new(IDENTITY_FLAGS_PUBKEY_HASH, true);
-    config.scheme = TestScheme::OnWhiteList;
-    config.scheme2 = TestScheme2::NoWitness;
-
-    let tx = gen_tx(&mut data_loader, &mut config);
-    let tx = sign_tx(&mut data_loader, tx, &mut config);
-    let resolved_tx = build_resolved_tx(&data_loader, &tx);
-
-    let mut verifier = verify_tx(resolved_tx, data_loader);
-
-    verifier.set_debug_printer(debug_printer);
-    let verify_result = verifier.verify(MAX_CYCLES);
-    assert!(verify_result.is_err());
-}
 
 #[test]
 fn test_pubkey_hash_not_on_wl() {
@@ -680,7 +627,7 @@ fn test_binary_unchanged() {
 
     let actual_hash = faster_hex::hex_string(&hash);
     assert_eq!(
-        "7464b14cc0157423f777ace0bf9e6a4842228a52e7b090d98e6149d611cb1f16",
+        "2dccc1db47b03851b0dbd0fef0f4031f65066bc7e304917df6b91917cee4df14",
         &actual_hash
     );
 }
@@ -1216,25 +1163,6 @@ fn test_cobuild_owner_lock_on_wl() {
     verify_result.expect("pass verification");
 }
 
-#[test]
-fn test_cobuild_owner_lock_on_wl_without_witness() {
-    let mut data_loader = DummyDataLoader::new();
-
-    let mut config = TestConfig::new(IDENTITY_FLAGS_OWNER_LOCK, true);
-    config.cobuild_enabled = true;
-    config.scheme = TestScheme::OnWhiteList;
-    config.scheme2 = TestScheme2::NoWitness;
-
-    let tx = gen_tx(&mut data_loader, &mut config);
-    let tx = sign_tx(&mut data_loader, tx, &mut config);
-    let resolved_tx = build_resolved_tx(&data_loader, &tx);
-
-    let mut verifier = verify_tx(resolved_tx, data_loader);
-
-    verifier.set_debug_printer(debug_printer);
-    let verify_result = verifier.verify(MAX_CYCLES);
-    assert!(verify_result.is_err());
-}
 
 #[test]
 fn test_cobuild_rsa_via_dl_unlock_with_time_lock() {

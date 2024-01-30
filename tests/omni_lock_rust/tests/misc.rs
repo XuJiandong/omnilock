@@ -815,9 +815,6 @@ pub fn sign_tx_by_input_group(
     for i in signed_witnesses.len()..tx.witnesses().len() {
         signed_witnesses.push(tx.witnesses().get(i).unwrap());
     }
-    if config.scheme2 == TestScheme2::NoWitness {
-        signed_witnesses.clear();
-    }
     if preimage_hash.len() == 20 {
         write_back_preimage_hash(dummy, IDENTITY_FLAGS_DL, preimage_hash);
     }

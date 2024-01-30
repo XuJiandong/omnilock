@@ -10,7 +10,7 @@ SECP256K1_SRC_20210801 := deps/secp256k1-20210801/src/ecmult_static_pre_context.
 OMNI_LOCK_CFLAGS :=$(subst ckb-c-std-lib,ckb-c-stdlib-20210801,$(CFLAGS)) -I deps/sparse-merkle-tree/c
 OMNI_LOCK_CFLAGS := $(subst secp256k1,secp256k1-20210801,$(OMNI_LOCK_CFLAGS))
 # enable log
-# OMNI_LOCK_CFLAGS += -DCKB_C_STDLIB_PRINTF -DCKB_C_STDLIB_PRINTF_BUFFER_SIZE=1024
+OMNI_LOCK_CFLAGS += -DCKB_C_STDLIB_PRINTF -DCKB_C_STDLIB_PRINTF_BUFFER_SIZE=1024
 
 
 PROTOCOL_HEADER := c/blockchain.h

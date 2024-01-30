@@ -397,24 +397,27 @@ int main() {
   CkbIdentityType identity = {0};
 
   mol2_cursor_t seal = {0};
+  uint8_t signing_message_hash[BLAKE2B_BLOCK_SIZE];
+  bool cobuild_enabled = false;
   /*
    * When it fails, WitnessArgs is used. No cobuild enabled.
    */
-  err = ckb_parse_message(g_cobuild_signing_message_hash, &seal);
+  err = ckb_parse_message(signing_message_hash, &seal);
   if (err) {
+    cobuild_enabled = false;
     mol2_cursor_t lock = {0};
     printf("cobuild disabled");
     bool witness_existing = false;
     err = get_witness_args_lock(&lock, &witness_existing);
     CHECK(err);
-    g_cobuild_enabled = false;
     err = parse_seal(&witness_lock, &lock, witness_existing);
+    CHECK(err);
   } else {
+    cobuild_enabled = true;
     printf("cobuild enabled");
-    g_cobuild_enabled = true;
     err = parse_seal(&witness_lock, &seal, true);
+    CHECK(err);
   }
-  CHECK(err);
 
   err = parse_args(&args);
   CHECK(err);
@@ -466,9 +469,13 @@ int main() {
     }
   }
   ckb_identity_init_code_buffer(code_buff, MAX_CODE_SIZE);
+  if (!cobuild_enabled) {
+    err = generate_sighash_all(signing_message_hash, BLAKE2B_BLOCK_SIZE);
+    CHECK(err);
+  }
   err = ckb_verify_identity(&identity, witness_lock.signature,
                             witness_lock.signature_size, witness_lock.preimage,
-                            witness_lock.preimage_size);
+                            witness_lock.preimage_size, signing_message_hash);
   CHECK(err);
 exit:
   return err;
