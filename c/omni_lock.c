@@ -83,7 +83,7 @@ typedef struct ArgsType {
   uint8_t info_cell[32];  // type script hash
 } ArgsType;
 
-// parsed from lock in witness
+// parsed from lock in witness or seal
 typedef struct WitnessLockType {
   bool has_identity;
   bool has_signature;
@@ -312,33 +312,17 @@ exit:
   return err;
 }
 
-int parse_witness_lock(WitnessLockType *witness_lock, mol2_cursor_t *seal) {
+static int parse_seal(WitnessLockType *witness_lock, mol2_cursor_t *seal,
+                      bool witness_existing) {
   int err = 0;
   witness_lock->has_signature = false;
   witness_lock->has_identity = false;
   witness_lock->has_proofs = false;
-  bool witness_existing = false;
-  mol2_cursor_t mol_lock_bytes = {0};
-
-  if (seal) {
-    mol_lock_bytes = *seal;
-    witness_existing = true;
-  } else {
-    WitnessArgsType witness_args;
-    err = make_witness(&witness_args);
-    CHECK(err);
-    witness_existing = witness_args.cur.size > 0;
-
-    // witness or witness lock can be empty if owner lock without omni is used
-    if (!witness_existing) return err;
-
-    BytesOptType mol_lock = witness_args.t->lock(&witness_args);
-    if (mol_lock.t->is_none(&mol_lock)) return err;
-    mol_lock_bytes = mol_lock.t->unwrap(&mol_lock);
+  if (!witness_existing) {
+    return 0;
   }
   // convert Bytes to OmniLockWitnessLock
-  OmniLockWitnessLockType mol_witness_lock =
-      make_OmniLockWitnessLock(&mol_lock_bytes);
+  OmniLockWitnessLockType mol_witness_lock = make_OmniLockWitnessLock(seal);
   IdentityOptType identity_opt =
       mol_witness_lock.t->omni_identity(&mol_witness_lock);
   witness_lock->has_identity = identity_opt.t->is_some(&identity_opt);
@@ -380,17 +364,30 @@ exit:
   return err;
 }
 
+static int get_witness_args_lock(mol2_cursor_t *lock, bool *witness_existing) {
+  int err = 0;
+  WitnessArgsType witness_args;
+  err = make_witness(&witness_args);
+  CHECK(err);
+  *witness_existing = witness_args.cur.size > 0;
+
+  // witness or witness lock can be empty if owner lock without omni is used
+  if (!*witness_existing) return 0;
+
+  BytesOptType mol_lock = witness_args.t->lock(&witness_args);
+  if (mol_lock.t->is_some(&mol_lock)) {
+    *lock = mol_lock.t->unwrap(&mol_lock);
+  }
+exit:
+  return err;
+}
+
+uint8_t code_buff[MAX_CODE_SIZE] __attribute__((aligned(RISCV_PGSIZE)));
 #ifdef CKB_USE_SIM
 int simulator_main() {
 #else
 int main() {
 #endif
-  // don't move code_buff into global variable. It doesn't work.
-  // it's a ckb-vm bug: the global variable will be freezed:
-  // https://github.com/nervosnetwork/ckb-vm/blob/d43f58d6bf8cc6210721fdcdb6e5ecba513ade0c/src/machine/elf_adaptor.rs#L28-L32
-  // The code can't be loaded into frozen memory.
-  uint8_t code_buff[MAX_CODE_SIZE] __attribute__((aligned(RISCV_PGSIZE)));
-
   int err = 0;
 
   WitnessLockType witness_lock = {0};
@@ -405,16 +402,19 @@ int main() {
    */
   err = ckb_parse_message(g_cobuild_signing_message_hash, &seal);
   if (err) {
+    mol2_cursor_t lock = {0};
     printf("cobuild disabled");
+    bool witness_existing = false;
+    err = get_witness_args_lock(&lock, &witness_existing);
+    CHECK(err);
     g_cobuild_enabled = false;
-    err = parse_witness_lock(&witness_lock, NULL);
+    err = parse_seal(&witness_lock, &lock, witness_existing);
   } else {
     printf("cobuild enabled");
     g_cobuild_enabled = true;
-    err = parse_witness_lock(&witness_lock, &seal);
+    err = parse_seal(&witness_lock, &seal, true);
   }
   CHECK(err);
-  printf("parse_witness_lock done");
 
   err = parse_args(&args);
   CHECK(err);
