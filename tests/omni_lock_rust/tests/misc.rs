@@ -2145,7 +2145,7 @@ pub fn verify_tx(
         Arc::new(consensus),
         Arc::new(TxVerifyEnv::new_commit(
             &HeaderView::new_advanced_builder()
-                .epoch(ckb_types::core::EpochNumberWithFraction::new(10, 0, 1).pack())
+                .epoch(ckb_types::core::EpochNumberWithFraction::new(5, 0, 1).pack())
                 .build(),
         )),
     )
