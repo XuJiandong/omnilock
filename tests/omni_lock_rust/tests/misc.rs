@@ -1879,7 +1879,6 @@ pub fn cobuild_generate_signing_message_hash(
         let (input_cell, input_cell_data) = data_loader.cells.get(&input_cell_out_point).unwrap();
         hasher.update(input_cell.as_slice());
         count += input_cell.as_slice().len();
-
         hasher.update(&(input_cell_data.len() as u32).to_le_bytes());
         count += 4;
         hasher.update(input_cell_data);

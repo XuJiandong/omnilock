@@ -144,7 +144,7 @@ void print_cursor(const char *name, mol2_cursor_t cursor) {
 #define BLAKE2B_UPDATE blake2b_update
 int blake2b_update_debug(blake2b_state *S, const void *pin, size_t inlen) {
   blake2b_update(S, pin, inlen);
-  print_raw_data("blake2b_update: ", (uint8_t *)pin, inlen);
+  print_raw_data("blake2b_update", (uint8_t *)pin, inlen);
   return 0;
 }
 
