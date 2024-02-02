@@ -16,6 +16,8 @@ https://github.com/cryptape/ckb-transaction-cobuild-poc/blob/main/ckb-transactio
 #define MOLECULEC2_VERSION 7002
 #include "cobuild.h"
 #include "molecule2_reader.h"
+#undef MOLECULEC2_VERSION
+#include "blockchain-api2.h"
 #include "cobuild_basic_mol2.h"
 
 #include "blake2b_decl_only.h"
@@ -31,7 +33,6 @@ https://github.com/cryptape/ckb-transaction-cobuild-poc/blob/main/ckb-transactio
 #endif
 
 #define BLAKE2B_BLOCK_SIZE 32
-#define MAX_CELL_SIZE 8192
 #define MAX_TYPESCRIPT_COUNT 512
 
 #define CHECK2(cond, code)                                               \
@@ -253,6 +254,36 @@ static uint32_t read_from_cell_data(uintptr_t arg[], uint8_t *ptr, uint32_t len,
   }
 }
 
+static uint32_t read_from_cell(uintptr_t arg[], uint8_t *ptr, uint32_t len,
+                               uint32_t offset) {
+  int err;
+  uint64_t output_len = len;
+  err = ckb_load_cell(ptr, &output_len, offset, arg[0], arg[1]);
+  if (err != 0) {
+    return 0;
+  }
+  if (output_len > len) {
+    return len;
+  } else {
+    return (uint32_t)output_len;
+  }
+}
+
+static uint32_t read_from_tx(uintptr_t arg[], uint8_t *ptr, uint32_t len,
+                             uint32_t offset) {
+  int err;
+  uint64_t output_len = len;
+  err = ckb_load_transaction(ptr, &output_len, offset);
+  if (err != 0) {
+    return 0;
+  }
+  if (output_len > len) {
+    return len;
+  } else {
+    return (uint32_t)output_len;
+  }
+}
+
 void ckb_new_cursor(mol2_cursor_t *cursor, uint32_t total_len,
                     read_from_t read_from, uint8_t *data_source,
                     uint32_t cache_len, size_t index, size_t source) {
@@ -400,7 +431,8 @@ int ckb_fetch_seal(mol2_cursor_t *seal_cursor) {
     printf("error in fetch_seal, id = %u", id);
     CHECK2(false, ERROR_SIGHASHALL_NOSEAL);
   }
-
+  mol2_add_offset(seal_cursor, MOL2_NUM_T_SIZE);
+  mol2_sub_size(seal_cursor, MOL2_NUM_T_SIZE);
 exit:
   return err;
 }
@@ -447,12 +479,12 @@ static int hash_cell(blake2b_state *ctx, size_t index, size_t source,
   uint8_t data_source[DEFAULT_DATA_SOURCE_LENGTH];
   int err = 0;
   // CellOutput
-  uint8_t cell[MAX_CELL_SIZE];
-  uint64_t cell_len = sizeof(cell);
-  err = ckb_load_cell(cell, &cell_len, 0, index, source);
-  CHECK(err);
-
-  BLAKE2B_UPDATE(ctx, cell, cell_len);
+  uint64_t cell_len = 0;
+  err = ckb_load_cell(0, &cell_len, 0, index, source);
+  mol2_cursor_t cell_cursor = {0};
+  ckb_new_cursor(&cell_cursor, cell_len, read_from_cell, data_source,
+                 MAX_CACHE_SIZE, index, source);
+  ckb_hash_cursor(ctx, cell_cursor);
   (*count) += cell_len;
 
   // Cell data
@@ -469,6 +501,31 @@ static int hash_cell(blake2b_state *ctx, size_t index, size_t source,
   CHECK(err);
   (*count) += cell_data_cursor.size;
 
+exit:
+  return err;
+}
+
+// there is no syscall to fetch cell dep directly. Get it from scratch based on
+// transaction data structure.
+static int hash_cell_deps(blake2b_state *ctx, size_t *count, size_t start,
+                          size_t size) {
+  int err = 0;
+  uint8_t data_source[DEFAULT_DATA_SOURCE_LENGTH];
+
+  uint64_t tx_len = 0;
+  err = ckb_load_transaction(0, &tx_len, 0);
+  mol2_cursor_t cur = {0};
+  ckb_new_cursor(&cur, tx_len, read_from_tx, data_source, MAX_CACHE_SIZE, 0, 0);
+  TransactionType tx = make_Transaction(&cur);
+  RawTransactionType raw = tx.t->raw(&tx);
+  CellDepVecType cell_deps = raw.t->cell_deps(&raw);
+  for (size_t index = start; index < (start + size); index++) {
+    bool existing = false;
+    CellDepType cell_dep = cell_deps.t->get(&cell_deps, index, &existing);
+    CHECK2(existing, ERROR_GENERAL);
+    ckb_hash_cursor(ctx, cell_dep.cur);
+    (*count) += cell_dep.cur.size;
+  }
 exit:
   return err;
 }
@@ -615,12 +672,12 @@ exit:
 static int parse_seal(const mol2_cursor_t original_seal, mol2_cursor_t *seal,
                       uint8_t *message_calculation_flow) {
   int err = 0;
-  uint32_t prefix_length = 1 + MOL2_NUM_T_SIZE;
-  uint8_t prefix[1 + MOL2_NUM_T_SIZE] = {0};
+  uint32_t prefix_length = 1;
+  uint8_t prefix[1] = {0};
 
   uint32_t len = mol2_read_at(&original_seal, prefix, prefix_length);
   CHECK2(len == prefix_length, ERROR_SEAL);
-  *message_calculation_flow = prefix[MOL2_NUM_T_SIZE];
+  *message_calculation_flow = prefix[0];
   *seal = original_seal;
   mol2_add_offset(seal, prefix_length);
   mol2_sub_size(seal, prefix_length);
@@ -735,17 +792,7 @@ int ckb_generate_otx_smh(mol2_cursor_t message_cursor, uint8_t *smh,
   // hash cell deps
   BLAKE2B_UPDATE(&ctx, &size->cell_deps, 4);
   count += 4;
-
-  for (size_t index = start->start_cell_deps;
-       index < (start->start_cell_deps + size->cell_deps); index++) {
-    uint8_t cell_dep[128];
-    uint64_t cell_dep_len = sizeof(cell_dep);
-    err =
-        ckb_load_header(cell_dep, &cell_dep_len, 0, index, CKB_SOURCE_CELL_DEP);
-    CHECK(err);
-    BLAKE2B_UPDATE(&ctx, cell_dep, cell_dep_len);
-    count += cell_dep_len;
-  }
+  hash_cell_deps(&ctx, &count, start->start_cell_deps, size->cell_deps);
 
   // hash header deps
   BLAKE2B_UPDATE(&ctx, &size->header_deps, 4);
@@ -761,6 +808,7 @@ int ckb_generate_otx_smh(mol2_cursor_t message_cursor, uint8_t *smh,
     count += header_dep_len;
   }
   printf("ckb_generate_otx_smh totally hashed %d bytes", count);
+  blake2b_final(&ctx, smh, BLAKE2B_BLOCK_SIZE);
 exit:
   return err;
 }
@@ -897,6 +945,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
     }
     err = ckb_generate_otx_smh(message.cur, smh, &start, &size);
     CHECK(err);
+    print_raw_data("smh", smh, BLAKE2B_BLOCK_SIZE);
     // step 6.f
     bool seal_found = false;
     SealPairVecType seals = otx.t->seals(&otx);
@@ -912,8 +961,10 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
       if (memcmp(hash, current_script_hash, sizeof(hash)) == 0) {
         // step 6.g
         original_seal = loop_seal.t->seal(&loop_seal);
-        CHECK2(!seal_found, ERROR_SEAL);
+        print_cursor("seal", original_seal);
+        // duplicated seals are ignored
         seal_found = true;
+        break;
       }
     }
     CHECK2(seal_found, ERROR_SEAL);
@@ -967,6 +1018,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
       err = ckb_load_cell_by_field(hash, &len, 0, j, CKB_SOURCE_INPUT,
                                    CKB_CELL_FIELD_LOCK_HASH);
       if (err == CKB_INDEX_OUT_OF_BOUND) {
+        err = CKB_SUCCESS;
         break;
       }
       CHECK(err);

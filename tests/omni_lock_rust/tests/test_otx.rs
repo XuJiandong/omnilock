@@ -1,4 +1,4 @@
-use ckb_types::prelude::{Builder, Entity, Pack};
+use ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use omni_lock_test::schemas;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -167,6 +167,11 @@ pub fn println_hex(name: &str, data: &[u8]) {
     println!("Tester(........): {}(len={}): {}", name, data.len(), hex::encode(data));
 }
 
+pub fn println_rtx(tx_resolved: &ckb_types::core::cell::ResolvedTransaction) {
+    let tx_json = ckb_jsonrpc_types::TransactionView::from(tx_resolved.transaction.clone());
+    println!("Tester(........): {}", serde_json::to_string_pretty(&tx_json).unwrap());
+}
+
 static BINARY_ALWAYS_SUCCESS: &[u8] = include_bytes!("../../../build/always_success");
 static BINARY_SECP256K1_DATA: &[u8] = include_bytes!("../../../build/secp256k1_data_20210801");
 static BINARY_OMNI_LOCK: &[u8] = include_bytes!("../../../build/omni_lock");
@@ -278,11 +283,54 @@ pub fn cobuild_create_signing_message_hash_sighash_all_only(
     result
 }
 
+pub fn cobuild_create_signing_message_hash_otx(
+    tx: ckb_types::core::TransactionView,
+    dl: &Resource,
+    message: &schemas::basic::Message,
+) -> Vec<u8> {
+    let mut hasher = blake2b_ref::Blake2bBuilder::new(32).personal(b"ckb-tcob-otxhash").build();
+    hasher.update(message.as_slice());
+    let inputs_len = tx.inputs().len();
+    hasher.update(&(inputs_len as u32).to_le_bytes()[..]);
+    for i in 0..inputs_len {
+        let input_cell = tx.inputs().get(i).unwrap();
+        let input_cell_out_point = input_cell.previous_output();
+        let input_cell_meta = dl.cell.get(&input_cell_out_point).unwrap();
+        hasher.update(input_cell.as_slice());
+        hasher.update(input_cell_meta.cell_output.as_slice());
+        hasher.update(&(input_cell_meta.data_bytes as u32).to_le_bytes());
+        hasher.update(&input_cell_meta.mem_cell_data.clone().unwrap());
+    }
+    let outputs_len = tx.outputs().len();
+    hasher.update(&(outputs_len as u32).to_le_bytes()[..]);
+    for i in 0..outputs_len {
+        let output_cell = tx.outputs().get(i).unwrap();
+        let output_cell_data: Vec<u8> = tx.outputs_data().get(i).unwrap().unpack();
+        hasher.update(output_cell.as_slice());
+        hasher.update(&(output_cell_data.len() as u32).to_le_bytes());
+        hasher.update(output_cell_data.as_slice());
+    }
+    let cell_dep_len = tx.cell_deps().len();
+    hasher.update(&(cell_dep_len as u32).to_le_bytes()[..]);
+    for i in 0..cell_dep_len {
+        let cell_dep = tx.cell_deps().get(i).unwrap();
+        hasher.update(cell_dep.as_slice());
+    }
+    let header_dep = tx.header_deps().len();
+    hasher.update(&(header_dep as u32).to_le_bytes()[..]);
+    for i in 0..header_dep {
+        hasher.update(tx.header_deps().get(i).unwrap().as_slice())
+    }
+    let mut result = vec![0u8; 32];
+    hasher.finalize(&mut result);
+    result
+}
+
 pub fn omnilock_create_witness_lock(sign: &[u8]) -> Vec<u8> {
     omni_lock_test::omni_lock::OmniLockWitnessLock::new_builder()
         .signature(Some(ckb_types::bytes::Bytes::copy_from_slice(sign)).pack())
         .build()
-        .as_bytes()
+        .as_slice()
         .to_vec()
 }
 
@@ -338,7 +386,7 @@ fn test_cobuild_sighash_all_bitcoin_p2pkh_compressed() {
     let sign = sign_bitcoin_p2pkh_compressed(prikey, &sign);
     let sign = omnilock_create_witness_lock(&sign);
     let seal = [vec![0x00], sign].concat();
-    println_hex("seal", seal.pack().as_slice());
+    println_hex("seal", seal.as_slice());
     let sa = schemas::basic::SighashAll::new_builder().seal(seal.pack()).message(msgs).build();
     let wl = schemas::top_level::WitnessLayout::new_builder().set(sa).build();
     let tx_builder = tx_builder.witness(wl.as_bytes().pack());
@@ -389,9 +437,90 @@ fn test_cobuild_sighash_all_only_ethereum() {
     let sign = sign_ethereum(prikey, &sign);
     let sign = omnilock_create_witness_lock(&sign);
     let seal = [vec![0x00], sign].concat();
-    println_hex("seal", seal.pack().as_slice());
+    println_hex("seal", seal.as_slice());
     let so = schemas::basic::SighashAllOnly::new_builder().seal(seal.pack()).build();
     let wl = schemas::top_level::WitnessLayout::new_builder().set(so).build();
+    let tx_builder = tx_builder.witness(wl.as_bytes().pack());
+
+    // Verify transaction
+    let tx = tx_builder.build();
+    let tx_resolved = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+    let verifier = Verifier::default();
+    verifier.verify(&tx_resolved, &dl).unwrap();
+}
+
+#[test]
+fn test_cobuild_otx_bitcoin_p2pkh_compressed() {
+    let mut dl = Resource::default();
+    let mut px = Pickaxer::default();
+    let tx_builder = ckb_types::core::TransactionBuilder::default();
+
+    // Create prior knowledge
+    let prikey = "0000000000000000000000000000000000000000000000000000000000000001";
+    let prikey = ckb_crypto::secp::Privkey::from_str(prikey).unwrap();
+    let pubkey = prikey.pubkey().unwrap();
+    let pubkey_hash = hash_ripemd160_sha256(&pubkey.serialize());
+    let args = [vec![IDENTITY_FLAGS_BITCOIN], pubkey_hash.to_vec(), vec![0x00]].concat();
+
+    // Create cell meta
+    let cell_meta_always_success = px.insert_cell_data(&mut dl, BINARY_ALWAYS_SUCCESS);
+    let cell_meta_secp256k1_data = px.insert_cell_data(&mut dl, BINARY_SECP256K1_DATA);
+    let cell_meta_omni_lock = px.insert_cell_data(&mut dl, BINARY_OMNI_LOCK);
+    let cell_meta_i = px.insert_cell_fund(&mut dl, px.create_script(&cell_meta_omni_lock, &args), None, &[]);
+
+    // Create cell dep
+    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_always_success));
+    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_secp256k1_data));
+    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_omni_lock));
+
+    // Create input
+    let tx_builder = tx_builder.input(px.create_cell_input(&cell_meta_i));
+
+    // Create output
+    let tx_builder = tx_builder.output(px.create_cell_output(
+        px.create_script(&cell_meta_always_success, &[]),
+        Some(px.create_script(&cell_meta_always_success, &[])),
+        &[],
+    ));
+
+    // Create output data
+    let tx_builder = tx_builder.output_data(Vec::new().pack());
+
+    // Create witness
+    let os = schemas::basic::OtxStart::new_builder().build();
+    let wl = schemas::top_level::WitnessLayout::new_builder().set(os).build();
+    let tx_builder = tx_builder.witness(wl.as_bytes().pack());
+
+    let msgs = {
+        let action = schemas::basic::Action::new_builder()
+            .script_info_hash(ckb_types::packed::Byte32::from_slice(&[0x00; 32]).unwrap())
+            .script_hash(px.create_script(&cell_meta_always_success, &[]).calc_script_hash())
+            .data(ckb_types::bytes::Bytes::from(vec![0x42; 128]).pack())
+            .build();
+        let action_vec = schemas::basic::ActionVec::new_builder().push(action).build();
+        let msgs = schemas::basic::Message::new_builder().actions(action_vec).build();
+        msgs
+    };
+    let sign = cobuild_create_signing_message_hash_otx(tx_builder.clone().build(), &dl, &msgs);
+    println_hex("smh", &sign);
+    let sign = sign_bitcoin_p2pkh_compressed(prikey, &sign);
+    let sign = omnilock_create_witness_lock(&sign);
+    let seal = [vec![0x00], sign].concat();
+    println_hex("seal", seal.as_slice());
+    let seal = schemas::basic::SealPair::new_builder()
+        .script_hash(px.create_script(&cell_meta_omni_lock, &args).calc_script_hash())
+        .seal(seal.pack())
+        .build();
+    let seal = schemas::basic::SealPairVec::new_builder().push(seal).build();
+    let ox = schemas::basic::Otx::new_builder()
+        .seals(seal)
+        .message(msgs)
+        .input_cells(1u32.pack())
+        .output_cells(1u32.pack())
+        .cell_deps(3u32.pack())
+        .header_deps(0u32.pack())
+        .build();
+    let wl = schemas::top_level::WitnessLayout::new_builder().set(ox).build();
     let tx_builder = tx_builder.witness(wl.as_bytes().pack());
 
     // Verify transaction
