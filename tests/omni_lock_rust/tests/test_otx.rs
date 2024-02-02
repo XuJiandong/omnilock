@@ -1,4 +1,5 @@
 use ckb_types::prelude::{Builder, Entity, Pack};
+use omni_lock_test::schemas;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -230,7 +231,7 @@ pub fn sign_ethereum(prikey: ckb_crypto::secp::Privkey, message: &[u8]) -> Vec<u
 pub fn cobuild_create_signing_message_hash_sighash_all(
     tx: ckb_types::core::TransactionView,
     dl: &Resource,
-    message: &omni_lock_test::schemas::basic::Message,
+    message: &schemas::basic::Message,
 ) -> Vec<u8> {
     let mut hasher = blake2b_ref::Blake2bBuilder::new(32).personal(b"ckb-tcob-sighash").build();
     hasher.update(message.as_slice());
@@ -324,13 +325,13 @@ fn test_cobuild_sighash_all_bitcoin_p2pkh_compressed() {
 
     // Create witness
     let msgs = {
-        let action = omni_lock_test::schemas::basic::Action::new_builder()
+        let action = schemas::basic::Action::new_builder()
             .script_info_hash(ckb_types::packed::Byte32::from_slice(&[0x00; 32]).unwrap())
             .script_hash(px.create_script(&cell_meta_always_success, &[]).calc_script_hash())
             .data(ckb_types::bytes::Bytes::from(vec![0x42; 128]).pack())
             .build();
-        let action_vec = omni_lock_test::schemas::basic::ActionVec::new_builder().push(action).build();
-        let msgs = omni_lock_test::schemas::basic::Message::new_builder().actions(action_vec).build();
+        let action_vec = schemas::basic::ActionVec::new_builder().push(action).build();
+        let msgs = schemas::basic::Message::new_builder().actions(action_vec).build();
         msgs
     };
     let sign = cobuild_create_signing_message_hash_sighash_all(tx_builder.clone().build(), &dl, &msgs);
@@ -338,8 +339,8 @@ fn test_cobuild_sighash_all_bitcoin_p2pkh_compressed() {
     let sign = omnilock_create_witness_lock(&sign);
     let seal = [vec![0x00], sign].concat();
     println_hex("seal", seal.pack().as_slice());
-    let sa = omni_lock_test::schemas::basic::SighashAll::new_builder().seal(seal.pack()).message(msgs).build();
-    let wl = omni_lock_test::schemas::top_level::WitnessLayout::new_builder().set(sa).build();
+    let sa = schemas::basic::SighashAll::new_builder().seal(seal.pack()).message(msgs).build();
+    let wl = schemas::top_level::WitnessLayout::new_builder().set(sa).build();
     let tx_builder = tx_builder.witness(wl.as_bytes().pack());
 
     // Verify transaction
@@ -389,8 +390,8 @@ fn test_cobuild_sighash_all_only_ethereum() {
     let sign = omnilock_create_witness_lock(&sign);
     let seal = [vec![0x00], sign].concat();
     println_hex("seal", seal.pack().as_slice());
-    let so = omni_lock_test::schemas::basic::SighashAllOnly::new_builder().seal(seal.pack()).build();
-    let wl = omni_lock_test::schemas::top_level::WitnessLayout::new_builder().set(so).build();
+    let so = schemas::basic::SighashAllOnly::new_builder().seal(seal.pack()).build();
+    let wl = schemas::top_level::WitnessLayout::new_builder().set(so).build();
     let tx_builder = tx_builder.witness(wl.as_bytes().pack());
 
     // Verify transaction
