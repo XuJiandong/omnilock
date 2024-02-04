@@ -145,10 +145,9 @@ impl Pickaxer {
         &self,
         lock: ckb_types::packed::Script,
         kype: Option<ckb_types::packed::Script>,
-        data: &[u8],
     ) -> ckb_types::packed::CellOutput {
         ckb_types::packed::CellOutput::new_builder()
-            .capacity(ckb_types::core::Capacity::bytes(61 + data.len()).unwrap().pack())
+            .capacity(ckb_types::core::Capacity::bytes(61).unwrap().pack())
             .lock(lock)
             .type_(ckb_types::packed::ScriptOpt::new_builder().set(kype).build())
             .build()
@@ -365,7 +364,6 @@ fn test_cobuild_sighash_all_bitcoin_p2pkh_compressed() {
     let tx_builder = tx_builder.output(px.create_cell_output(
         px.create_script(&cell_meta_always_success, &[]),
         Some(px.create_script(&cell_meta_always_success, &[])),
-        &[],
     ));
 
     // Create output data
@@ -426,8 +424,7 @@ fn test_cobuild_sighash_all_only_ethereum() {
     let tx_builder = tx_builder.input(px.create_cell_input(&cell_meta_i));
 
     // Create output
-    let tx_builder =
-        tx_builder.output(px.create_cell_output(px.create_script(&cell_meta_always_success, &[]), None, &[]));
+    let tx_builder = tx_builder.output(px.create_cell_output(px.create_script(&cell_meta_always_success, &[]), None));
 
     // Create output data
     let tx_builder = tx_builder.output_data(Vec::new().pack());
@@ -480,7 +477,6 @@ fn test_cobuild_otx_bitcoin_p2pkh_compressed() {
     let tx_builder = tx_builder.output(px.create_cell_output(
         px.create_script(&cell_meta_always_success, &[]),
         Some(px.create_script(&cell_meta_always_success, &[])),
-        &[],
     ));
 
     // Create output data
