@@ -511,7 +511,7 @@ static int hash_cell_deps(blake2b_state *ctx, size_t *count, size_t start,
   uint64_t tx_len = 0;
   err = ckb_load_transaction(0, &tx_len, 0);
   CHECK(err);
-  
+
   mol2_cursor_t cur = {0};
   ckb_new_cursor(&cur, tx_len, read_from_tx, data_source, MAX_CACHE_SIZE, 0, 0);
   TransactionType tx = make_Transaction(&cur);
@@ -902,7 +902,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
     CHECK(err);
     // step 6.d
     bool found = false;
-    size_t end = (size_t)(ie + otx.t->input_cells);
+    size_t end = (size_t)(ie + otx.t->input_cells(&otx));
     for (size_t index2 = ie; index2 < end; index2++) {
       uint8_t hash[BLAKE2B_BLOCK_SIZE];
       uint64_t len = BLAKE2B_BLOCK_SIZE;
