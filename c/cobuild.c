@@ -915,7 +915,10 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
       }
     }
     if (!found) {
-      // TODO
+      ie += otx.t->input_cells(&otx);
+      oe += otx.t->output_cells(&otx);
+      ce += otx.t->cell_deps(&otx);
+      he += otx.t->header_deps(&otx);
       continue;
     }
     // step 6.e
