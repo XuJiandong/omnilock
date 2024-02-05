@@ -3,7 +3,7 @@ LD := ld.lld-16
 OBJCOPY := llvm-objcopy-16
 CFLAGS := \
 	--target=riscv64 -march=rv64imc_zba_zbb_zbc_zbs \
-	-fPIC -O3 -fno-builtin-printf -fno-builtin-memcmp -nostdinc -nostdlib -fvisibility=hidden -fdata-sections -ffunction-sections \
+	-fPIC -O2 -fno-builtin-printf -fno-builtin-memcmp -nostdinc -nostdlib -fvisibility=hidden -fdata-sections -ffunction-sections \
 	-I deps/secp256k1/src -I deps/secp256k1 -I deps/ckb-c-std-lib -I deps/ckb-c-std-lib/libc -I deps/ckb-c-std-lib/molecule -I c -I build \
 	-Wall -Wno-nonnull -Wno-unused-function -g
 LDFLAGS := -nostdlib -static 
