@@ -23,7 +23,7 @@ fn gen_info_cell_type_script() -> (Script, [u8; 32]) {
     rng.fill(&mut args[..]);
     let script = Script::new_builder()
         .code_hash(data_hash.clone())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data1.into())
         .args(Bytes::from(args).pack())
         .build();
     let script_hash = script.calc_script_hash();
@@ -49,7 +49,7 @@ fn sudt_type_script(loader: &DummyDataLoader, tx: &TransactionView) -> Script {
     let data_hash = CellOutput::calc_data_hash(&SIMPLE_UDT);
     Script::new_builder()
         .code_hash(data_hash.clone())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data1.into())
         .args(omni_lock_hash.as_bytes().pack())
         .build()
 }
