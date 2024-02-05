@@ -42,14 +42,6 @@ int main(int argc, char* argv[]) {
                  pre128_size);
   blake2b_final(&blake2b_ctx, hash, 32);
 
-  fprintf(fp, "static uint8_t ckb_secp256k1_data_hash[32] = {\n  ");
-  for (int i = 0; i < 32; i++) {
-    fprintf(fp, "%u", hash[i]);
-    if (i != 31) {
-      fprintf(fp, ", ");
-    }
-  }
-  fprintf(fp, "\n};\n");
   fprintf(fp, "#endif\n");
   fclose(fp);
 

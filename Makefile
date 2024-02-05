@@ -38,6 +38,9 @@ build/always_success: c/always_success.c
 build/secp256k1_data_info_20210801.h: build/dump_secp256k1_data_20210801
 	$<
 
+c/secp256k1_data_20210801.h: build/secp256k1_data_20210801
+	xxd -i -name ckb_secp256k1_data $< > $@
+
 build/dump_secp256k1_data_20210801: c/dump_secp256k1_data_20210801.c $(SECP256K1_SRC_20210801)
 	mkdir -p build
 	gcc -I deps/secp256k1-20210801/src -I deps/secp256k1-20210801 -o $@ $<
@@ -46,12 +49,8 @@ build/dump_secp256k1_data_20210801: c/dump_secp256k1_data_20210801.c $(SECP256K1
 $(SECP256K1_SRC_20210801):
 	cd deps/secp256k1-20210801 && \
 		./autogen.sh && \
-		CC=$(CC) LD=$(LD) ./configure --with-bignum=no --enable-ecmult-static-precomputation --enable-endomorphism --enable-module-recovery --host=$(TARGET) && \
+		CC=$(CC) LD=$(LD) ./configure --enable-ecmult-static-precomputation --with-ecmult-window=2 --enable-module-recovery --host=$(TARGET) && \
 		make src/ecmult_static_pre_context.h src/ecmult_static_context.h
-
-
-build/impl.o: deps/ckb-c-std-lib/libc/src/impl.c
-	$(CC) -c $(filter-out -DCKB_DECLARATION_ONLY, $(CFLAGS_MBEDTLS)) $(LDFLAGS_MBEDTLS) -o $@ $^
 
 ${PROTOCOL_SCHEMA}:
 	curl -L -o $@ ${PROTOCOL_URL}
