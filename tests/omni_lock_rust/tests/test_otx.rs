@@ -863,7 +863,7 @@ fn assemble_otx(otxs: Vec<ckb_types::core::TransactionView>) -> ckb_types::core:
 }
 
 #[test]
-fn test_cobuild_otx_a0() {
+fn test_cobuild_otx_simple() {
     let mut dl = Resource::default();
     let mut px = Pickaxer::default();
     let tx = assemble_otx(vec![generate_otx_a0(&mut dl, &mut px)]);
@@ -873,77 +873,83 @@ fn test_cobuild_otx_a0() {
 }
 
 #[test]
-fn test_cobuild_otx_a0_a0() {
+fn test_cobuild_otx_prefix_and_suffix() {
     let mut dl = Resource::default();
     let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_a0(&mut dl, &mut px), generate_otx_a0(&mut dl, &mut px)]);
+    let tx_builder = ckb_types::core::TransactionBuilder::default();
+
+    // Create otx prefix
+    let cell_meta_always_success = px.insert_cell_data(&mut dl, BINARY_ALWAYS_SUCCESS);
+    let cell_meta_i = px.insert_cell_fund(&mut dl, px.create_script(&cell_meta_always_success, &[]), None, &[]);
+    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_always_success));
+    let tx_builder = tx_builder.input(px.create_cell_input(&cell_meta_i));
+    let tx_builder = tx_builder.output(px.create_cell_output(
+        px.create_script(&cell_meta_always_success, &[]),
+        Some(px.create_script(&cell_meta_always_success, &[])),
+    ));
+    let tx_builder = tx_builder.output_data(vec![].pack());
+
+    // Append otx
+    let os = schemas::basic::OtxStart::new_builder()
+        .start_cell_deps(1u32.pack())
+        .start_header_deps(0u32.pack())
+        .start_input_cell(1u32.pack())
+        .start_output_cell(1u32.pack())
+        .build();
+    let wl = schemas::top_level::WitnessLayout::new_builder().set(os).build();
+    let mut tx_builder = tx_builder.witness(wl.as_bytes().pack());
+    let otxs = vec![generate_otx_a0(&mut dl, &mut px), generate_otx_b0(&mut dl, &mut px)];
+    for otx in otxs {
+        for e in otx.cell_deps_iter() {
+            tx_builder = tx_builder.cell_dep(e);
+        }
+        for e in otx.inputs().into_iter() {
+            tx_builder = tx_builder.input(e);
+        }
+        for e in otx.outputs().into_iter() {
+            tx_builder = tx_builder.output(e);
+        }
+        for e in otx.outputs_data().into_iter() {
+            tx_builder = tx_builder.output_data(e);
+        }
+        for e in otx.witnesses().into_iter() {
+            tx_builder = tx_builder.witness(e);
+        }
+    }
+
+    // Create otx suffix. Add a sighash all only cell for pay fees.
+    let prikey = "000000000000000000000000000000000000000000000000000000000000000f";
+    let prikey = ckb_crypto::secp::Privkey::from_str(prikey).unwrap();
+    let pubkey = prikey.pubkey().unwrap();
+    let pubkey_hash = hash_keccak160(&pubkey.as_ref()[..]);
+    let args = [vec![IDENTITY_FLAGS_ETHEREUM], pubkey_hash, vec![0x00]].concat();
+    let cell_meta_always_success = px.insert_cell_data(&mut dl, BINARY_ALWAYS_SUCCESS);
+    let cell_meta_secp256k1_data = px.insert_cell_data(&mut dl, BINARY_SECP256K1_DATA);
+    let cell_meta_omni_lock = px.insert_cell_data(&mut dl, BINARY_OMNI_LOCK);
+    let cell_meta_i = px.insert_cell_fund(&mut dl, px.create_script(&cell_meta_omni_lock, &args), None, &[]);
+    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_always_success));
+    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_secp256k1_data));
+    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_omni_lock));
+    let tx_builder = tx_builder.input(px.create_cell_input(&cell_meta_i));
+    let tx_builder = tx_builder.output(px.create_cell_output(px.create_script(&cell_meta_always_success, &[]), None));
+    let tx_builder = tx_builder.output_data(Vec::new().pack());
+    let sign = cobuild_create_signing_message_hash_sighash_all_only(tx_builder.clone().build(), &dl);
+    let sign = sign_ethereum(prikey, &sign);
+    let sign = omnilock_create_witness_lock(&sign);
+    let seal = [vec![0x00], sign].concat();
+    println_hex("seal", seal.as_slice());
+    let so = schemas::basic::SighashAllOnly::new_builder().seal(seal.pack()).build();
+    let wl = schemas::top_level::WitnessLayout::new_builder().set(so).build();
+    let tx_builder = tx_builder.witness(wl.as_bytes().pack());
+
+    let tx = tx_builder.build();
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
     verifier.verify(&tx, &dl).unwrap();
 }
 
 #[test]
-fn test_cobuild_otx_b0() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_b0(&mut dl, &mut px)]);
-    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
-    let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
-}
-
-#[test]
-fn test_cobuild_otx_a0_b0() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_a0(&mut dl, &mut px), generate_otx_b0(&mut dl, &mut px)]);
-    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
-    let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
-}
-
-#[test]
-fn test_cobuild_otx_c0() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_c0(&mut dl, &mut px)]);
-    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
-    let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
-}
-
-#[test]
-fn test_cobuild_otx_c0_a0() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_c0(&mut dl, &mut px), generate_otx_a0(&mut dl, &mut px)]);
-    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
-    let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
-}
-
-#[test]
-fn test_cobuild_otx_d0() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_d0(&mut dl, &mut px)]);
-    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
-    let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
-}
-
-#[test]
-fn test_cobuild_otx_d0_c0() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_d0(&mut dl, &mut px), generate_otx_c0(&mut dl, &mut px)]);
-    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
-    let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
-}
-
-#[test]
-fn test_cobuild_otx() {
+fn test_cobuild_otx_random() {
     type Fntype = dyn Fn(&mut Resource, &mut Pickaxer) -> ckb_types::core::TransactionView;
     let mut rgen = rand::prelude::thread_rng();
     let mut success_set = Vec::<(&str, Box<Fntype>)>::new();
@@ -951,12 +957,21 @@ fn test_cobuild_otx() {
     success_set.push(("b0", Box::new(generate_otx_b0)));
     success_set.push(("c0", Box::new(generate_otx_c0)));
     success_set.push(("d0", Box::new(generate_otx_d0)));
+    for i in 0..success_set.len() {
+        let mut dl = Resource::default();
+        let mut px = Pickaxer::default();
+        println_log(format!("case: {}", success_set[i].0).as_str());
+        let tx = assemble_otx(vec![success_set[i].1(&mut dl, &mut px)]);
+        let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+        let verifier = Verifier::default();
+        verifier.verify(&tx, &dl).unwrap();
+    }
     for _ in 0..32 {
         let mut dl = Resource::default();
         let mut px = Pickaxer::default();
         let mut hint = vec![];
         let mut data = vec![];
-        for _ in 0..(rgen.next_u32() as usize % success_set.len()) + 1 {
+        for _ in 0..2 + (rgen.next_u32() as usize % 3) {
             let nf = success_set.choose(&mut rgen).unwrap();
             hint.push(nf.0);
             data.push(nf.1(&mut dl, &mut px));

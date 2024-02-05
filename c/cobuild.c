@@ -1016,7 +1016,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
     if (index < is || index >= ie) {
       uint8_t hash[BLAKE2B_BLOCK_SIZE];
       uint64_t len = BLAKE2B_BLOCK_SIZE;
-      err = ckb_load_cell_by_field(hash, &len, 0, j, CKB_SOURCE_INPUT,
+      err = ckb_load_cell_by_field(hash, &len, 0, index, CKB_SOURCE_INPUT,
                                    CKB_CELL_FIELD_LOCK_HASH);
       CHECK_LOOP(err);
       if (memcmp(hash, current_script_hash, sizeof(hash)) == 0) {
