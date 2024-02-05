@@ -6,7 +6,7 @@ CFLAGS := \
 	-fPIC -O3 -fno-builtin-printf -fno-builtin-memcmp -nostdinc -nostdlib -fvisibility=hidden -fdata-sections -ffunction-sections \
 	-I deps/secp256k1/src -I deps/secp256k1 -I deps/ckb-c-std-lib -I deps/ckb-c-std-lib/libc -I deps/ckb-c-std-lib/molecule -I c -I build \
 	-Wall -Wno-nonnull -Wno-unused-function -g
-LDFLAGS := -nostdlib -static --gc-sections
+LDFLAGS := -nostdlib -static 
 SECP256K1_SRC_20210801 := deps/secp256k1-20210801/src/ecmult_static_pre_context.h
 
 
@@ -23,9 +23,12 @@ PROTOCOL_URL := https://raw.githubusercontent.com/nervosnetwork/ckb/${PROTOCOL_V
 MOLC := moleculec
 MOLC_VERSION := 0.7.0
 
-CLANG_FORMAT_DOCKER := kason223/clang-format@sha256:3cce35b0400a7d420ec8504558a02bdfc12fd2d10e40206f140c4545059cd95d
+BUILDER_DOCKER := xujiandong/ckb-riscv-llvm-toolchain@sha256:6409ab0d3e335c74088b54f4f73252f4b3367ae364d5c7ca7acee82135f5af4d
 
 all: build/omni_lock build/always_success
+
+all-via-docker:
+	docker run --rm -v `pwd`:/code ${BUILDER_DOCKER} bash -c "cd /code && make -f Makefile.clang all"
 
 build/always_success: c/always_success.c
 	$(CC) $(OMNI_LOCK_CFLAGS) $(LDFLAGS) -o $@ $<
@@ -37,14 +40,14 @@ build/secp256k1_data_info_20210801.h: build/dump_secp256k1_data_20210801
 
 build/dump_secp256k1_data_20210801: c/dump_secp256k1_data_20210801.c $(SECP256K1_SRC_20210801)
 	mkdir -p build
-	gcc -I deps/secp256k1-20210801/src -I deps/secp256k1-20210801 -o $@ $<
+	$(CC) -I deps/secp256k1-20210801/src -I deps/secp256k1-20210801 -o $@ $<
 
 
 $(SECP256K1_SRC_20210801):
 	cd deps/secp256k1-20210801 && \
 		./autogen.sh && \
-		CC=$(CC) LD=$(LD) ./configure --with-bignum=no --with-asm=no \
-			--enable-ecmult-static-precomputation --enable-endomorphism --enable-module-recovery && \
+		CC=$(CC) LD=$(LD) ./configure --with-asm=no \
+			--enable-ecmult-static-precomputation --enable-module-recovery && \
 		make src/ecmult_static_pre_context.h src/ecmult_static_context.h
 
 
@@ -59,7 +62,7 @@ ALL_C_SOURCE := $(wildcard c/omni_lock.c c/omni_lock_acp.h c/omni_lock_time_lock
 	c/blake2b_decl_only.h c/cobuild.h c/cobuild.c)
 
 fmt:
-	docker run --rm -v `pwd`:/code ${CLANG_FORMAT_DOCKER} bash -c "cd code && clang-format -i -style=Google $(ALL_C_SOURCE)"
+	docker run --rm -v `pwd`:/code ${BUILDER_DOCKER} bash -c "cd code && clang-format -i -style=Google $(ALL_C_SOURCE)"
 	git diff --exit-code $(ALL_C_SOURCE)
 
 mol:
