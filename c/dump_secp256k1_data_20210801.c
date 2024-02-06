@@ -40,10 +40,10 @@ int main(int argc, char* argv[]) {
     fprintf(fp, "0x%02x", p[i]);
     fprintf(fp, ", ");
   }
-  fprintf(fp, "\n");  
+  fprintf(fp, "\n");
   p = (unsigned char*)secp256k1_ecmult_static_pre128_context;
   for (int i = 0; i < pre128_size; i++) {
-    fprintf(fp, "%u", p[i]);
+    fprintf(fp, "0x%02x", p[i]);
     if (i != (pre128_size -1)) {
       fprintf(fp, ", ");
     }
