@@ -39,7 +39,7 @@ fn test_sighash_all_unlock() {
     let mut verifier = verify_tx(resolved_tx, data_loader.clone());
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
-    print!("cycles = {}", verify_result.clone().unwrap());
+    println!("cycles = {}", verify_result.clone().unwrap());
     verify_result.expect("pass verification");
 }
 

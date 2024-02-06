@@ -38,9 +38,6 @@ build/always_success: c/always_success.c
 build/secp256k1_data_info_20210801.h: build/dump_secp256k1_data_20210801
 	$<
 
-c/secp256k1_data_20210801.h: build/secp256k1_data_20210801
-	xxd -i -name ckb_secp256k1_data $< > $@
-
 build/dump_secp256k1_data_20210801: c/dump_secp256k1_data_20210801.c $(SECP256K1_SRC_20210801)
 	mkdir -p build
 	gcc -I deps/secp256k1-20210801/src -I deps/secp256k1-20210801 -o $@ $<
@@ -49,7 +46,7 @@ build/dump_secp256k1_data_20210801: c/dump_secp256k1_data_20210801.c $(SECP256K1
 $(SECP256K1_SRC_20210801):
 	cd deps/secp256k1-20210801 && \
 		./autogen.sh && \
-		CC=$(CC) LD=$(LD) ./configure --enable-ecmult-static-precomputation --with-ecmult-window=2 --enable-module-recovery --host=$(TARGET) && \
+		CC=$(CC) LD=$(LD) ./configure --enable-ecmult-static-precomputation --with-ecmult-window=6 --enable-module-recovery --host=$(TARGET) && \
 		make src/ecmult_static_pre_context.h src/ecmult_static_context.h
 
 ${PROTOCOL_SCHEMA}:
@@ -83,7 +80,7 @@ omni_lock_mol:
 build/cobuild.o: c/cobuild.c c/cobuild.h
 	$(CC) -c $(OMNI_LOCK_CFLAGS) -o $@ $<
 
-build/omni_lock.o: c/omni_lock.c c/omni_lock_supply.h c/omni_lock_acp.h c/secp256k1_lock.h build/secp256k1_data_info_20210801.h $(SECP256K1_SRC_20210801) c/ckb_identity.h
+build/omni_lock.o: c/omni_lock.c c/omni_lock_supply.h c/omni_lock_acp.h build/secp256k1_data_info_20210801.h $(SECP256K1_SRC_20210801) c/ckb_identity.h
 	$(CC) -c $(OMNI_LOCK_CFLAGS) -o $@ $<
 
 build/omni_lock: build/omni_lock.o build/cobuild.o
@@ -97,14 +94,17 @@ cobuild_mol:
 	${MOLC} --language - --schema-file c/basic.mol --format json > build/cobuild_basic_mol2.json
 	moleculec-c2 --input build/cobuild_basic_mol2.json | clang-format -style=Google > c/cobuild_basic_mol2.h
 
-clean:
+clean: clean2
 	rm -rf build/secp256k1_data_info_20210801.h build/dump_secp256k1_data_20210801
-	rm -rf build/secp256k1_data_20210801
+	rm -f build/secp256k1_data_20210801
+	cd deps/secp256k1-20210801 && [ -f "Makefile" ] && make clean
+
+clean2:
 	rm -rf build/*.debug
 	rm -f build/omni_lock
 	rm -f build/*.o
-	cd deps/secp256k1-20210801 && [ -f "Makefile" ] && make clean
-
+	rm -f build/always_success
+	
 install-tools:
 	if [ ! -x "$$(command -v "${MOLC}")" ] \
 			|| [ "$$(${MOLC} --version | awk '{ print $$2 }' | tr -d ' ')" != "${MOLC_VERSION}" ]; then \

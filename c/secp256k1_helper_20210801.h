@@ -16,7 +16,6 @@
 #define HAVE_CONFIG_H 1
 #define USE_EXTERNAL_DEFAULT_CALLBACKS
 #include <secp256k1.c>
-#include "secp256k1_data_20210801.h"
 
 void secp256k1_default_illegal_callback_fn(const char* str, void* data) {
   (void)str;
@@ -34,8 +33,7 @@ void secp256k1_default_error_callback_fn(const char* str, void* data) {
  * data should at least be CKB_SECP256K1_DATA_SIZE big
  * so as to hold all loaded data.
  */
-int ckb_secp256k1_custom_verify_only_initialize(secp256k1_context* context,
-                                                void* data) {
+int ckb_secp256k1_custom_verify_only_initialize(secp256k1_context* context) {
 
   context->illegal_callback = default_illegal_callback;
   context->error_callback = default_error_callback;
