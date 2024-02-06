@@ -1,4 +1,4 @@
-name: Rust
+name: Clang
 
 on: [push, pull_request]
 

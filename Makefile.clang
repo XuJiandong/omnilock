@@ -3,10 +3,10 @@ LD := ld.lld-16
 OBJCOPY := llvm-objcopy-16
 CFLAGS := \
 	--target=riscv64 -march=rv64imc_zba_zbb_zbc_zbs \
-	-fPIC -O3 -fno-builtin-printf -fno-builtin-memcmp -fno-builtin-memset -nostdinc -nostdlib -fvisibility=hidden -fdata-sections -ffunction-sections \
+	-fPIC -O2 -fno-builtin-printf -fno-builtin-memcmp -fno-builtin-memset -nostdinc -nostdlib -fvisibility=hidden -fdata-sections -ffunction-sections \
 	-I deps/secp256k1/src -I deps/secp256k1 -I deps/ckb-c-std-lib -I deps/ckb-c-std-lib/libc -I deps/ckb-c-std-lib/molecule -I c -I build \
 	-Wall -Wno-nonnull -Wno-unused-function -g
-LDFLAGS := -nostdlib -static 
+LDFLAGS := -nostdlib -static --gc-sections
 SECP256K1_SRC_20210801 := deps/secp256k1-20210801/src/ecmult_static_pre_context.h
 
 
@@ -27,11 +27,12 @@ BUILDER_DOCKER := xujiandong/ckb-riscv-llvm-toolchain@sha256:6409ab0d3e335c74088
 
 all: build/omni_lock build/always_success
 
-all-via-docker:
+all-via-docker: ${PROTOCOL_HEADER}
 	docker run --rm -v `pwd`:/code ${BUILDER_DOCKER} bash -c "cd /code && make -f Makefile.clang all"
 
+
 build/always_success: c/always_success.c
-	$(CC) $(OMNI_LOCK_CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) $(OMNI_LOCK_CFLAGS) -nostdlib -static -Wl,--gc-sections -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
@@ -46,13 +47,8 @@ build/dump_secp256k1_data_20210801: c/dump_secp256k1_data_20210801.c $(SECP256K1
 $(SECP256K1_SRC_20210801):
 	cd deps/secp256k1-20210801 && \
 		./autogen.sh && \
-		CC=$(CC) LD=$(LD) ./configure --with-asm=no \
-			--enable-ecmult-static-precomputation --enable-module-recovery && \
+		CC=$(CC) LD=$(LD) ./configure --with-asm=no --enable-ecmult-static-precomputation --with-ecmult-window=6 --enable-module-recovery && \
 		make src/ecmult_static_pre_context.h src/ecmult_static_context.h
-
-
-build/impl.o: deps/ckb-c-std-lib/libc/src/impl.c
-	$(CC) -c $(filter-out -DCKB_DECLARATION_ONLY, $(CFLAGS_MBEDTLS)) $(LDFLAGS_MBEDTLS) -o $@ $^
 
 ${PROTOCOL_SCHEMA}:
 	curl -L -o $@ ${PROTOCOL_URL}
@@ -92,6 +88,7 @@ build/omni_lock: build/omni_lock.o build/cobuild.o
 	$(LD) $(LDFLAGS) -o $@ $^
 	cp $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
+	ls -l $@
 
 cobuild_mol:
 	${MOLC} --language rust --schema-file c/basic.mol | rustfmt > tests/omni_lock_rust/src/schemas/basic.rs
@@ -99,13 +96,16 @@ cobuild_mol:
 	${MOLC} --language - --schema-file c/basic.mol --format json > build/cobuild_basic_mol2.json
 	moleculec-c2 --input build/cobuild_basic_mol2.json | clang-format -style=Google > c/cobuild_basic_mol2.h
 
-clean:
+clean: clean2
 	rm -rf build/secp256k1_data_info_20210801.h build/dump_secp256k1_data_20210801
-	rm -rf build/secp256k1_data_20210801
+	rm -f build/secp256k1_data_20210801
+	cd deps/secp256k1-20210801 && [ -f "Makefile" ] && make clean
+
+clean2:
 	rm -rf build/*.debug
 	rm -f build/omni_lock
 	rm -f build/*.o
-	cd deps/secp256k1-20210801 && [ -f "Makefile" ] && make clean
+	rm -f build/always_success
 
 install-tools:
 	if [ ! -x "$$(command -v "${MOLC}")" ] \
