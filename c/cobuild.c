@@ -897,6 +897,18 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
     mol2_union_t uni = mol2_union_unpack(&cursor);
     OtxType otx = make_Otx(&uni.cursor);
     MessageType message = otx.t->message(&otx);
+    Otx size = {
+        .input_cells = otx.t->input_cells(&otx),
+        .output_cells = otx.t->output_cells(&otx),
+        .cell_deps = otx.t->cell_deps(&otx),
+        .header_deps = otx.t->header_deps(&otx),
+    };
+    // 6.b
+    if (size.input_cells == 0 && size.output_cells == 0 &&
+        size.cell_deps == 0 && size.header_deps == 0) {
+      // TODO
+      CHECK2(false, ERROR_WRONG_OTX);
+    }
     // step 6.c
     err = check_type_script_existing(message.cur);
     CHECK(err);
@@ -928,18 +940,6 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
         .start_cell_deps = ce,
         .start_header_deps = he,
     };
-    Otx size = {
-        .input_cells = otx.t->input_cells(&otx),
-        .output_cells = otx.t->output_cells(&otx),
-        .cell_deps = otx.t->cell_deps(&otx),
-        .header_deps = otx.t->header_deps(&otx),
-    };
-    // 6.b
-    if (size.input_cells == 0 && size.output_cells == 0 &&
-        size.cell_deps == 0 && size.header_deps == 0) {
-      // TODO
-      CHECK2(false, ERROR_WRONG_OTX);
-    }
     err = ckb_generate_otx_smh(message.cur, smh, &start, &size);
     CHECK(err);
     print_raw_data("smh", smh, BLAKE2B_BLOCK_SIZE);
