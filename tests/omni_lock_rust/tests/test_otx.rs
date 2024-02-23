@@ -1,4 +1,5 @@
 use ckb_types::prelude::{Builder, Entity, Pack, Unpack};
+use molecule::prelude::Reader;
 use omni_lock_test::schemas;
 use rand::seq::SliceRandom;
 use rand::RngCore;
@@ -352,6 +353,22 @@ pub fn omnilock_create_witness_lock(sign: &[u8]) -> Vec<u8> {
         .build()
         .as_slice()
         .to_vec()
+}
+
+const ERROR_TYPESCRIPT_MISSING: i8 = 116;
+const ERROR_SEAL: i8 = 117;
+const ERROR_FLOW: i8 = 118;
+const ERROR_OTX_START_DUP: i8 = 119;
+const ERROR_WRONG_OTX: i8 = 120;
+
+pub fn assert_script_error(err: ckb_error::Error, err_code: i8) {
+    let error_string = err.to_string();
+    assert!(
+        error_string.contains(format!("error code {}", err_code).as_str()),
+        "error_string: {}, expected_error_code: {}",
+        error_string,
+        err_code
+    );
 }
 
 #[test]
@@ -837,11 +854,148 @@ fn generate_otx_d0(dl: &mut Resource, px: &mut Pickaxer) -> ckb_types::core::Tra
     tx_builder.build()
 }
 
+// Failed: No seal
+fn generate_otx_a1_fail(dl: &mut Resource, px: &mut Pickaxer) -> ckb_types::core::TransactionView {
+    let tx = generate_otx_a0(dl, px);
+    let mut witnesses: Vec<ckb_types::packed::Bytes> = tx.witnesses().into_iter().map(|f| f).collect();
+
+    let witness = witnesses.get(0).unwrap();
+    let mut otx = None;
+    let wl = schemas::top_level::WitnessLayout::from_slice(&witness.as_slice()[4..]).unwrap();
+    match wl.as_reader().to_enum() {
+        schemas::top_level::WitnessLayoutUnionReader::Otx(otx_reader) => {
+            otx = Some(
+                schemas::basic::Otx::new_unchecked(otx_reader.as_slice().to_vec().into())
+                    .as_builder()
+                    .seals(schemas::basic::SealPairVec::new_builder().build())
+                    .build(),
+            );
+        }
+        _ => {}
+    };
+
+    assert!(otx.is_some());
+    witnesses[0] = schemas::top_level::WitnessLayout::new_builder().set(otx.unwrap()).build().as_bytes().pack();
+
+    tx.as_advanced_builder().set_witnesses(witnesses).build()
+}
+
+// Failed: The test_cobuild_otx_msg_flow is not 0
+fn generate_otx_a2_fail(dl: &mut Resource, px: &mut Pickaxer) -> ckb_types::core::TransactionView {
+    let tx = generate_otx_a0(dl, px);
+    let mut witnesses: Vec<ckb_types::packed::Bytes> = tx.witnesses().into_iter().map(|f| f).collect();
+
+    let witness = witnesses.get(0).unwrap();
+    let mut otx = None;
+
+    let wl = schemas::top_level::WitnessLayout::from_slice(&witness.as_slice()[4..]).unwrap();
+    match wl.as_reader().to_enum() {
+        schemas::top_level::WitnessLayoutUnionReader::Otx(otx_reader) => {
+            let mut seal = otx_reader.seals().get(0).unwrap().seal().as_slice().to_vec();
+            seal[0] = 0x22;
+
+            let seal =
+                schemas::basic::SealPair::new_unchecked(otx_reader.seals().get(0).unwrap().as_slice().to_vec().into())
+                    .as_builder()
+                    .seal(seal.pack())
+                    .build();
+
+            otx = Some(
+                schemas::basic::Otx::new_unchecked(otx_reader.as_slice().to_vec().into())
+                    .as_builder()
+                    .seals(schemas::basic::SealPairVec::new_builder().push(seal).build())
+                    .build(),
+            );
+        }
+        _ => {}
+    };
+
+    assert!(otx.is_some());
+    witnesses[0] = schemas::top_level::WitnessLayout::new_builder().set(otx.unwrap()).build().as_bytes().pack();
+
+    tx.as_advanced_builder().set_witnesses(witnesses).build()
+}
+
+// Failed: Message Action ScriptHash
+fn generate_otx_a3_fail(dl: &mut Resource, px: &mut Pickaxer) -> ckb_types::core::TransactionView {
+    let tx = generate_otx_a0(dl, px);
+    let mut witnesses: Vec<ckb_types::packed::Bytes> = tx.witnesses().into_iter().map(|f| f).collect();
+
+    let witness = witnesses.get(0).unwrap();
+    let mut otx = None;
+    let wl = schemas::top_level::WitnessLayout::from_slice(&witness.as_slice()[4..]).unwrap();
+    match wl.as_reader().to_enum() {
+        schemas::top_level::WitnessLayoutUnionReader::Otx(otx_reader) => {
+            let cell_meta_always_success = px.insert_cell_data(dl, BINARY_ALWAYS_SUCCESS);
+            let hash = px.create_script(&cell_meta_always_success, &[]).calc_script_hash();
+            let hash = hash.as_builder().nth0(0.into()).nth1(0.into()).nth2(0.into()).build();
+
+            let msg = schemas::basic::Message::new_unchecked(otx_reader.message().as_slice().to_vec().into())
+                .as_builder()
+                .actions(
+                    schemas::basic::ActionVec::new_builder()
+                        .push(
+                            schemas::basic::Action::new_unchecked(
+                                otx_reader.message().actions().get(0).unwrap().as_slice().to_vec().into(),
+                            )
+                            .as_builder()
+                            .script_hash(hash)
+                            .build(),
+                        )
+                        .build(),
+                )
+                .build();
+
+            otx = Some(
+                schemas::basic::Otx::new_unchecked(otx_reader.as_slice().to_vec().into())
+                    .as_builder()
+                    .message(msg)
+                    .build(),
+            );
+        }
+        _ => {}
+    };
+
+    assert!(otx.is_some());
+    witnesses[0] = schemas::top_level::WitnessLayout::new_builder().set(otx.unwrap()).build().as_bytes().pack();
+
+    tx.as_advanced_builder().set_witnesses(witnesses).build()
+}
+
+// Failed: The intput cells/output cells/cell deps/header deps is 0
+fn generate_otx_a4_fail(dl: &mut Resource, px: &mut Pickaxer) -> ckb_types::core::TransactionView {
+    let tx = generate_otx_a0(dl, px);
+    let mut witnesses: Vec<ckb_types::packed::Bytes> = tx.witnesses().into_iter().map(|f| f).collect();
+
+    let witness = witnesses.get(0).unwrap();
+    let mut otx = None;
+    let wl = schemas::top_level::WitnessLayout::from_slice(&witness.as_slice()[4..]).unwrap();
+    match wl.as_reader().to_enum() {
+        schemas::top_level::WitnessLayoutUnionReader::Otx(otx_reader) => {
+            otx = Some(
+                schemas::basic::Otx::new_unchecked(otx_reader.as_slice().to_vec().into())
+                    .as_builder()
+                    .input_cells(0u32.pack())
+                    .output_cells(0u32.pack())
+                    .cell_deps(0u32.pack())
+                    .header_deps(0u32.pack())
+                    .build(),
+            );
+        }
+        _ => {}
+    };
+
+    assert!(otx.is_some());
+    witnesses[0] = schemas::top_level::WitnessLayout::new_builder().set(otx.unwrap()).build().as_bytes().pack();
+
+    tx.as_advanced_builder().set_witnesses(witnesses).build()
+}
+
 fn assemble_otx(otxs: Vec<ckb_types::core::TransactionView>) -> ckb_types::core::TransactionView {
-    let mut tx_builder = ckb_types::core::TransactionBuilder::default();
+    let tx_builder = ckb_types::core::TransactionBuilder::default();
     let os = schemas::basic::OtxStart::new_builder().build();
     let wl = schemas::top_level::WitnessLayout::new_builder().set(os).build();
-    tx_builder = tx_builder.witness(wl.as_bytes().pack());
+    let mut tx_builder = tx_builder.witness(wl.as_bytes().pack());
     for otx in otxs {
         for e in otx.cell_deps_iter() {
             tx_builder = tx_builder.cell_dep(e);
@@ -859,7 +1013,28 @@ fn assemble_otx(otxs: Vec<ckb_types::core::TransactionView>) -> ckb_types::core:
             tx_builder = tx_builder.witness(e);
         }
     }
+
     tx_builder.build()
+}
+
+fn merge_bytesvec<T1: IntoIterator, T2: Clone + From<<T1 as IntoIterator>::Item>>(v1: T1, v2: T1) -> Vec<T2> {
+    let v1: Vec<T2> = v1.into_iter().map(|f| f.into()).collect();
+    let v2: Vec<T2> = v2.into_iter().map(|f| f.into()).collect();
+    [v1, v2].concat()
+}
+
+fn merge_tx(
+    tx1: ckb_types::core::TransactionView,
+    tx2: ckb_types::core::TransactionView,
+) -> ckb_types::core::TransactionView {
+    let tx_builder = tx1.as_advanced_builder();
+    tx_builder
+        .set_cell_deps(merge_bytesvec(tx1.cell_deps(), tx2.cell_deps()))
+        .set_inputs(merge_bytesvec(tx1.inputs(), tx2.inputs()))
+        .set_outputs(merge_bytesvec(tx1.outputs(), tx2.outputs()))
+        .set_witnesses(merge_bytesvec(tx1.witnesses(), tx2.witnesses()))
+        .set_outputs_data(merge_bytesvec(tx1.outputs_data(), tx2.outputs_data()))
+        .build()
 }
 
 #[test]
@@ -1054,4 +1229,138 @@ fn test_cobuild_otx_random() {
         let verifier = Verifier::default();
         verifier.verify(&tx, &dl).unwrap();
     }
+
+    // Failed
+    // Compared with success_set, Error code is added
+    let mut failed_set = Vec::<(&str, Box<Fntype>, i8)>::new();
+    failed_set.push(("a1", Box::new(generate_otx_a1_fail), ERROR_SEAL));
+    failed_set.push(("a2", Box::new(generate_otx_a2_fail), ERROR_FLOW));
+    failed_set.push(("a3", Box::new(generate_otx_a3_fail), ERROR_TYPESCRIPT_MISSING));
+    failed_set.push(("a3", Box::new(generate_otx_a4_fail), ERROR_WRONG_OTX));
+
+    for i in 0..failed_set.len() {
+        let mut dl = Resource::default();
+        let mut px = Pickaxer::default();
+        println_log(format!("case: {}", failed_set[i].0).as_str());
+        let tx = assemble_otx(vec![failed_set[i].1(&mut dl, &mut px)]);
+        let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+        let verifier = Verifier::default();
+        assert_script_error(verifier.verify(&tx, &dl).unwrap_err(), failed_set[i].2);
+    }
+
+    // n success + 1 failed
+    for _ in 0..32 {
+        let mut dl = Resource::default();
+        let mut px = Pickaxer::default();
+        let mut hint = vec![];
+        let mut data = vec![];
+        for _ in 0..2 + (rgen.next_u32() as usize % 3) {
+            let nf = success_set.choose(&mut rgen).unwrap();
+            hint.push(nf.0);
+            data.push(nf.1(&mut dl, &mut px));
+        }
+
+        let nf = failed_set.choose(&mut rgen).unwrap();
+        hint.push(nf.0);
+        data.push(nf.1(&mut dl, &mut px));
+
+        // println_log(format!("case: {}", hint.join(" + ")).as_str());
+        let tx = assemble_otx(data);
+        let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+        let verifier = Verifier::default();
+        assert_script_error(verifier.verify(&tx, &dl).unwrap_err(), nf.2);
+    }
+
+    // n success + n failed.
+    //  unknow error code
+    for _ in 0..32 {
+        let mut dl = Resource::default();
+        let mut px = Pickaxer::default();
+        let mut hint = vec![];
+        let mut data = vec![];
+        for _ in 0..2 + (rgen.next_u32() as usize % 3) {
+            let nf = success_set.choose(&mut rgen).unwrap();
+            hint.push(nf.0);
+            data.push(nf.1(&mut dl, &mut px));
+        }
+
+        for _ in 0..2 + (rgen.next_u32() as usize % 3) {
+            let nf = failed_set.choose(&mut rgen).unwrap();
+            hint.push(nf.0);
+            data.push(nf.1(&mut dl, &mut px));
+        }
+
+        // println_log(format!("case: {}", hint.join(" + ")).as_str());
+        let tx = assemble_otx(data);
+        let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+        let verifier = Verifier::default();
+        let error_code = verifier.verify(&tx, &dl).unwrap_err();
+        println!("random multi failed, error code: {}", error_code);
+    }
+}
+
+#[test]
+fn test_cobuild_otx_double_otx_start() {
+    let mut dl = Resource::default();
+    let mut px = Pickaxer::default();
+
+    let tx = assemble_otx(vec![generate_otx_a0(&mut dl, &mut px)]);
+
+    let tx = {
+        let mut witnesses: Vec<ckb_types::packed::Bytes> = tx.witnesses().into_iter().map(|f| f).collect();
+
+        let os = schemas::basic::OtxStart::new_builder().build();
+        let wl = schemas::top_level::WitnessLayout::new_builder().set(os).build();
+        witnesses.insert(0, wl.as_bytes().pack());
+
+        tx.as_advanced_builder().set_witnesses(witnesses).build()
+    };
+
+    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+    let verifier = Verifier::default();
+    assert_script_error(verifier.verify(&tx, &dl).unwrap_err(), ERROR_OTX_START_DUP);
+}
+
+#[test]
+fn test_cobuild_otx_noexistent_otx_id() {
+    let mut dl = Resource::default();
+    let mut px = Pickaxer::default();
+
+    let tx = assemble_otx(vec![generate_otx_a0(&mut dl, &mut px)]);
+    let tx = {
+        let mut witnesses: Vec<ckb_types::packed::Bytes> = tx.witnesses().into_iter().map(|f| f).collect();
+
+        let os = schemas::basic::OtxStart::new_builder().build();
+        let wl = schemas::top_level::WitnessLayout::new_builder().set(os).build();
+        witnesses.insert(0, wl.as_bytes().pack());
+
+        tx.as_advanced_builder().set_witnesses(witnesses).build()
+    };
+
+    let mut witnesses: Vec<ckb_types::packed::Bytes> = tx.witnesses().into_iter().map(|f| f).collect();
+    let mut witness = witnesses.get(1).unwrap().as_slice().to_vec();
+    witness[4..8].copy_from_slice(&(4278190084u32 + 2).to_le_bytes()); // WitnessLayoutOtxStart + 1
+    witnesses[1] = witness.pack();
+
+    let tx = tx.as_advanced_builder().set_witnesses(witnesses).build();
+
+    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+    let verifier = Verifier::default();
+    let result_verifier = verifier.verify(&tx, &dl);
+    assert_script_error(result_verifier.unwrap_err(), ERROR_WRONG_OTX);
+}
+
+#[test]
+fn test_cobuild_otx_double_input() {
+    let mut dl = Resource::default();
+    let mut px = Pickaxer::default();
+
+    let tx = merge_tx(
+        assemble_otx(vec![generate_otx_a0(&mut dl, &mut px)]),
+        assemble_otx(vec![generate_otx_a0(&mut dl, &mut px)]),
+    );
+
+    let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
+    let verifier = Verifier::default();
+    assert_script_error(verifier.verify(&tx, &dl).unwrap_err(), ERROR_OTX_START_DUP);
 }

@@ -447,7 +447,7 @@ int ckb_fetch_otx_start(bool *has_otx, size_t *i, OtxStart *otx_start) {
 
     if (len >= sizeof(id) && id == WitnessLayoutOtxStart) {
       // step 4
-      // TODO
+      // test_cobuild_otx_double_otx_start
       CHECK2(!*has_otx, ERROR_OTX_START_DUP);
       *has_otx = true;
       *i = index;
@@ -651,7 +651,7 @@ static int check_type_script_existing(mol2_cursor_t message) {
     CHECK2(len == BLAKE2B_BLOCK_SIZE, ERROR_MESSAGE);
     void *found = bsearch(hash_buff, type_script_hash, type_script_hash_count,
                           BLAKE2B_BLOCK_SIZE, hash_cmp);
-    // TODO
+    // test_cobuild_otx_noexistent_type_script_hash
     CHECK2(found != NULL, ERROR_TYPESCRIPT_MISSING);
   }
 
@@ -891,7 +891,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
     err = try_union_unpack_id(&cursor, &id);
     if (err || id != WitnessLayoutOtx) {
       // step 6
-      // TODO
+      // test_cobuild_otx_noexistent_otx_id && err == 0
       break;
     }
     mol2_union_t uni = mol2_union_unpack(&cursor);
@@ -906,7 +906,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
     // 6.b
     if (size.input_cells == 0 && size.output_cells == 0 &&
         size.cell_deps == 0 && size.header_deps == 0) {
-      // TODO
+      // test_cobuild_otx_msg_size_all_0
       CHECK2(false, ERROR_WRONG_OTX);
     }
     // step 6.c
@@ -964,7 +964,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
         break;
       }
     }
-    // TODO
+    // test_cobuild_otx_no_seal
     CHECK2(seal_found, ERROR_SEAL);
     // support more message calculation flows base on the first byte of seal
     uint8_t message_calculation_flow = 0;
@@ -979,7 +979,7 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
         ckb_exit(err);
       }
     } else {
-      // TODO
+      // test_cobuild_otx_msg_flow
       CHECK2(false, ERROR_FLOW);
     }
     // step 6.h
@@ -996,13 +996,13 @@ int ckb_cobuild_entry(ScriptEntryType callback, bool *cobuild_enabled) {
     // [0, i) [j, +infinity)
     if (index < i || index >= j) {
       WitnessLayoutId id;
-      int err = get_witness_layout(index, &id);
+      err = get_witness_layout(index, &id);
       if (err == CKB_INDEX_OUT_OF_BOUND) {
         err = 0;
         break;
       }
       if (err == 0) {
-        // TODO
+        // test_cobuild_otx_noexistent_otx_id
         CHECK2(id != WitnessLayoutOtx, ERROR_WRONG_OTX);
       }
     }
