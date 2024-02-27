@@ -371,7 +371,7 @@ fn test_multisig_0_2_3_unlock_with_since_relative_not_comparable() {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
-    assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_VALUE)
+    assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_FLAGS)
 }
 
 #[test]
@@ -390,7 +390,7 @@ fn test_multisig_0_2_3_unlock_with_since_flags() {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
-    assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_VALUE)
+    assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_FLAGS)
 }
 
 #[test]
@@ -434,7 +434,7 @@ fn test_multisig_0_2_3_unlock_with_since_epoch() {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
-    assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_VALUE)
+    assert_script_error(verify_result.unwrap_err(), ERROR_INCORRECT_SINCE_FLAGS)
 }
 
 #[test]

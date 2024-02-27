@@ -2,6 +2,7 @@
 #define OMNI_LOCK_TIME_LOCK_H_
 
 #include "ckb_utils.h"
+#define ERROR_INCORRECT_SINCE_FLAGS (-23)
 #define ERROR_INCORRECT_SINCE_VALUE (-24)
 
 /* check since,
@@ -27,7 +28,7 @@ int check_since(uint64_t since) {
     int comparable = 1;
     int cmp = ckb_since_cmp(since, input_since, &comparable);
     if (!comparable) {
-      return ERROR_INCORRECT_SINCE_VALUE;
+      return ERROR_INCORRECT_SINCE_FLAGS;
     }
     if (cmp == 1) {
       return ERROR_INCORRECT_SINCE_VALUE;
