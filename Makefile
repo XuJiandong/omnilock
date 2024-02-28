@@ -39,7 +39,7 @@ build/secp256k1_data_info.h: build/dump_secp256k1_data
 
 build/dump_secp256k1_data: c/dump_secp256k1_data.c $(SECP256K1_SRC)
 	mkdir -p build
-	gcc -I deps/secp256k1/src -I deps/secp256k1 -o $@ $<
+	gcc -I deps/secp256k1/src -I deps/secp256k1 -I deps/ckb-c-stdlib -o $@ $<
 
 
 $(SECP256K1_SRC):
