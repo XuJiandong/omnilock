@@ -147,23 +147,17 @@ int parse_args(ScriptType script, ArgsType *args) {
   CHECK2(script_args.size >= 1, ERROR_ARGS_FORMAT);
   CHECK2(mol2_read_at(&script_args, &args->id.flags, 1) == 1,
          ERROR_ARGS_FORMAT);
-  mol2_add_offset(&script_args, 1);
-  mol2_sub_size(&script_args, 1);
-  mol2_validate(&script_args);
+  script_args = mol2_cursor_slice_start(&script_args, 1);
 
   // parse blake160
   CHECK2(script_args.size >= 20, ERROR_ARGS_FORMAT);
   CHECK2(mol2_read_at(&script_args, args->id.id, 20) == 20, ERROR_ARGS_FORMAT);
-  mol2_add_offset(&script_args, 20);
-  mol2_sub_size(&script_args, 20);
-  mol2_validate(&script_args);
+  script_args = mol2_cursor_slice_start(&script_args, 20);
 
   CHECK2(script_args.size >= 1, ERROR_ARGS_FORMAT);
   CHECK2(mol2_read_at(&script_args, &args->omni_lock_flags, 1) == 1,
          ERROR_ARGS_FORMAT);
-  mol2_add_offset(&script_args, 1);
-  mol2_sub_size(&script_args, 1);
-  mol2_validate(&script_args);
+  script_args = mol2_cursor_slice_start(&script_args, 1);
 
   args->has_omni_root = args->omni_lock_flags & OMNI_ROOT_MASK;
   args->has_acp = args->omni_lock_flags & ACP_MASK;
@@ -188,35 +182,25 @@ int parse_args(ScriptType script, ArgsType *args) {
     if (args->has_omni_root) {
       CHECK2(mol2_read_at(&script_args, args->omni_root, 32) == 32,
              ERROR_ARGS_FORMAT);
-      mol2_add_offset(&script_args, 32);
-      mol2_sub_size(&script_args, 32);
-      mol2_validate(&script_args);
+      script_args = mol2_cursor_slice_start(&script_args, 32);
     }
     if (args->has_acp) {
       CHECK2(mol2_read_at(&script_args, &args->ckb_minimum, 1) == 1,
              ERROR_ARGS_FORMAT);
-      mol2_add_offset(&script_args, 1);
-      mol2_sub_size(&script_args, 1);
-      mol2_validate(&script_args);
+      script_args = mol2_cursor_slice_start(&script_args, 1);
       CHECK2(mol2_read_at(&script_args, &args->udt_minimum, 1) == 1,
              ERROR_ARGS_FORMAT);
-      mol2_add_offset(&script_args, 1);
-      mol2_sub_size(&script_args, 1);
-      mol2_validate(&script_args);
+      script_args = mol2_cursor_slice_start(&script_args, 1);
     }
     if (args->has_since) {
       CHECK2(mol2_read_at(&script_args, (uint8_t *)(&args->since), 8) == 8,
              ERROR_ARGS_FORMAT);
-      mol2_add_offset(&script_args, 8);
-      mol2_sub_size(&script_args, 8);
-      mol2_validate(&script_args);
+      script_args = mol2_cursor_slice_start(&script_args, 8);
     }
     if (args->has_supply) {
       CHECK2(mol2_read_at(&script_args, args->info_cell, 32) == 32,
              ERROR_ARGS_FORMAT);
-      mol2_add_offset(&script_args, 32);
-      mol2_sub_size(&script_args, 32);
-      mol2_validate(&script_args);
+      script_args = mol2_cursor_slice_start(&script_args, 32);
     }
     CHECK2(script_args.size == 0, ERROR_INVALID_MOL_FORMAT);
   }

@@ -496,10 +496,7 @@ static int parse_seal(const mol2_cursor_t original_seal, mol2_cursor_t *seal,
   uint32_t len = mol2_read_at(&original_seal, prefix, prefix_length);
   CHECK2(len == prefix_length, ERROR_SEAL);
   *message_calculation_flow = prefix[0];
-  *seal = original_seal;
-  mol2_add_offset(seal, prefix_length);
-  mol2_sub_size(seal, prefix_length);
-  mol2_validate(seal);
+  *seal = mol2_cursor_slice_start(&original_seal, prefix_length);
 
 exit:
   return err;

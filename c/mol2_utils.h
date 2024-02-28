@@ -320,4 +320,29 @@ static int ckb_env_initialize(Env *env) {
   return 0;
 }
 
+static inline mol2_cursor_t mol2_cursor_slice(const mol2_cursor_t *cur,
+                                              uint32_t offset,
+                                              uint32_t new_size) {
+  uint32_t shrinked_size;
+  // This way we can ensure that the new size will be no larger than original
+  // cursor
+  if (__builtin_sub_overflow(cur->size, new_size, &shrinked_size)) {
+    MOL2_PANIC(MOL2_ERR_OVERFLOW);
+  }
+  mol2_cursor_t res = *cur;
+  mol2_add_offset(&res, offset);
+  mol2_sub_size(&res, shrinked_size);
+  mol2_validate(&res);
+  return res;
+}
+
+static inline mol2_cursor_t mol2_cursor_slice_start(const mol2_cursor_t *cur,
+                                                    uint32_t offset) {
+  mol2_cursor_t res = *cur;
+  mol2_add_offset(&res, offset);
+  mol2_sub_size(&res, offset);
+  mol2_validate(&res);
+  return res;
+}
+
 #endif /* MOL2_UTILS */
