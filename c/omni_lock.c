@@ -7,6 +7,9 @@
 int ckb_exit(signed char);
 #define MOLECULEC_VERSION 7000
 
+// Includes the actual implementation here
+#include <blake2b.h>
+
 #include "blockchain-api2.h"
 #include "ckb_consts.h"
 

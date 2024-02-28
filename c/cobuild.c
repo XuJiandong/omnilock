@@ -19,7 +19,12 @@ int ckb_exit(signed char);
 #include "cobuild_top_level_mol2.h"
 #include "cobuild.h"
 
-#include "blake2b_decl_only.h"
+#define BLAKE2_IMPL_H
+#define BLAKE2_REF_C
+#include "blake2b.h"
+#undef BLAKE2_REF_C
+#undef BLAKE2_IMPL_H
+
 #include "ckb_consts.h"
 #include "ckb_syscall_apis.h"
 // clang-format on
