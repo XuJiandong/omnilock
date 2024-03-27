@@ -19,7 +19,7 @@ MOLC_VERSION := 0.7.0
 
 # docker pull nervos/ckb-riscv-gnu-toolchain:gnu-jammy-20230214
 BUILDER_DOCKER := nervos/ckb-riscv-gnu-toolchain@sha256:d3f649ef8079395eb25a21ceaeb15674f47eaa2d8cc23adc8bcdae3d5abce6ec
-CLANG_FORMAT_DOCKER := kason223/clang-format@sha256:3cce35b0400a7d420ec8504558a02bdfc12fd2d10e40206f140c4545059cd95d
+CLANG_FORMAT_DOCKER := xujiandong/ckb-riscv-llvm-toolchain@sha256:6409ab0d3e335c74088b54f4f73252f4b3367ae364d5c7ca7acee82135f5af4d
 
 all: build/omni_lock build/always_success
 
@@ -27,7 +27,7 @@ all-via-docker:
 	docker run --rm -v `pwd`:/code ${BUILDER_DOCKER} bash -c "cd /code && make"
 
 build/always_success: c/always_success.c
-	$(CC) $(OMNI_LOCK_CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
@@ -47,7 +47,7 @@ $(SECP256K1_SRC):
 
 ALL_C_SOURCE := $(wildcard c/omni_lock.c c/omni_lock_acp.h c/omni_lock_time_lock.h \
 	tests/omni_lock/omni_lock_sim.c tests/omni_lock/ckb_syscall_omni_lock_sim.h tests/omni_lock/omni_lock_supply.h\
-	c/cobuild.h c/cobuild.h c/molecule2_verify.h)
+	c/cobuild.h c/molecule2_verify.h mol2_utils.h)
 
 fmt:
 	docker run -u $(shell id -u):$(shell id -g) --rm -v `pwd`:/code ${CLANG_FORMAT_DOCKER} bash -c "cd code && clang-format -i -style='{BasedOnStyle: google, SortIncludes: false}' $(ALL_C_SOURCE)"
