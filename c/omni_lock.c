@@ -136,7 +136,6 @@ bool is_memory_enough(mol_seg_t seg, const uint8_t *cur, uint32_t len) {
 int parse_args(ScriptType script, ArgsType *args) {
   int err = 0;
 
-  // TODO: do we need to validate Script structure here?
   mol2_cursor_t script_args = script.t->args(&script);
 
   // parse flags

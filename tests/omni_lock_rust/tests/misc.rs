@@ -25,7 +25,7 @@ use ckb_types::{
     H256 as CkbH256,
 };
 use lazy_static::lazy_static;
-use rand::prelude::{thread_rng, ThreadRng};
+use rand::prelude::thread_rng;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use rand::RngCore;
@@ -153,15 +153,6 @@ pub fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
         smt.update(key, value).unwrap();
     }
     smt
-}
-
-pub fn gen_random_out_point(rng: &mut ThreadRng) -> OutPoint {
-    let hash = {
-        let mut buf = [0u8; 32];
-        rng.fill(&mut buf);
-        Pack::pack(&buf)
-    };
-    OutPoint::new(hash, 0)
 }
 
 //
@@ -437,7 +428,7 @@ pub fn append_rc(
 ) -> TransactionBuilder {
     let smt_key = config.id.to_smt_key();
     let (proofs, rc_datas, proof_masks) = generate_proofs(config.scheme, &vec![smt_key]);
-    let (rc_root, b0) = generate_rce_cell(dummy, tx_builder, rc_datas, config.smt_in_input);
+    let (rc_root, b0) = generate_rce_cell(dummy, tx_builder, rc_datas, config.smt_in_input, config);
 
     config.proofs = proofs;
     config.proof_masks = proof_masks;
@@ -454,11 +445,14 @@ pub fn append_rc(
 pub fn append_input_lock_script_hash(
     dummy: &mut DummyDataLoader,
     tx_builder: TransactionBuilder,
+    config: &TestConfig,
 ) -> (TransactionBuilder, Bytes) {
     let mut rng = thread_rng();
     let previous_tx_hash = {
-        let mut buf = [0u8; 32];
-        rng.fill(&mut buf);
+        let mut buf = [3u8; 32];
+        if config.random_tx {
+            rng.fill(&mut buf);
+        }
         buf.pack()
     };
     let previous_out_point = OutPoint::new(previous_tx_hash, 0);
@@ -686,8 +680,10 @@ pub fn gen_tx_with_grouped_args(
     // setup sighash_all dep
     let sighash_all_out_point = {
         let contract_tx_hash = {
-            let mut buf = [0u8; 32];
-            rng.fill(&mut buf);
+            let mut buf = [1u8; 32];
+            if config.random_tx {
+                rng.fill(&mut buf);
+            }
             buf.pack()
         };
         OutPoint::new(contract_tx_hash.clone(), 0)
@@ -700,8 +696,10 @@ pub fn gen_tx_with_grouped_args(
     // always success
     let always_success_out_point = {
         let contract_tx_hash = {
-            let mut buf = [0u8; 32];
-            rng.fill(&mut buf);
+            let mut buf = [2u8; 32];
+            if config.random_tx {
+                rng.fill(&mut buf);
+            }
             buf.pack()
         };
         OutPoint::new(contract_tx_hash.clone(), 0)
@@ -725,7 +723,7 @@ pub fn gen_tx_with_grouped_args(
 
     if config.is_owner_lock() {
         // insert an "always success" script as first input script.
-        let (b0, blake160) = append_input_lock_script_hash(dummy, tx_builder);
+        let (b0, blake160) = append_input_lock_script_hash(dummy, tx_builder, &config);
         tx_builder = b0;
         config.id.blake160 = blake160;
     }
@@ -738,7 +736,9 @@ pub fn gen_tx_with_grouped_args(
         for _ in 0..inputs_size {
             let previous_tx_hash = {
                 let mut buf = [0u8; 32];
-                rng.fill(&mut buf);
+                if config.random_tx {
+                    rng.fill(&mut buf);
+                }
                 buf.pack()
             };
             args = if config.is_owner_lock() {
@@ -771,7 +771,9 @@ pub fn gen_tx_with_grouped_args(
             let mut random_extra_witness = Vec::<u8>::new();
             let witness_len = if config.scheme == TestScheme::LongWitness { 40000 } else { 32 };
             random_extra_witness.resize(witness_len, 0);
-            rng.fill(&mut random_extra_witness[..]);
+            if config.random_tx {
+                rng.fill(&mut random_extra_witness[..]);
+            }
 
             let witness_args = WitnessArgsBuilder::default()
                 .input_type(Some(Bytes::copy_from_slice(&random_extra_witness[..])).pack())
@@ -1257,6 +1259,7 @@ pub struct TestConfig {
     pub cobuild_message: Option<Message>,
     pub custom_extension_witnesses: Option<Vec<Bytes>>,
     pub custom_extension_witnesses_beginning: Option<Vec<Bytes>>,
+    pub random_tx: bool,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -1355,6 +1358,7 @@ impl TestConfig {
             cobuild_message: Some(Message::default()),
             custom_extension_witnesses: None,
             custom_extension_witnesses_beginning: None,
+            random_tx: true,
         }
     }
 
@@ -1636,13 +1640,16 @@ pub fn generate_rce_cell(
     mut tx_builder: TransactionBuilder,
     rc_data: Vec<Bytes>,
     smt_in_input: bool,
+    config: &TestConfig,
 ) -> (Byte32, TransactionBuilder) {
     let mut rng = thread_rng();
     let mut cell_vec_builder = RCCellVecBuilder::default();
 
     for rc_rule in rc_data {
         let mut random_args: [u8; 32] = Default::default();
-        rng.fill(&mut random_args[..]);
+        if config.random_tx {
+            rng.fill(&mut random_args[..]);
+        }
         // let's first build the RCE cell which contains the RCData(RCRule/RCCellVec).
         let (b0, rce_script) =
             build_script(dummy, tx_builder, true, smt_in_input, &rc_rule, Bytes::copy_from_slice(random_args.as_ref()));
@@ -1658,7 +1665,9 @@ pub fn generate_rce_cell(
     let rce_cell_content = RCDataBuilder::default().set(RCDataUnion::RCCellVec(cell_vec)).build();
 
     let mut random_args: [u8; 32] = Default::default();
-    rng.fill(&mut random_args[..]);
+    if config.random_tx {
+        rng.fill(&mut random_args[..]);
+    }
 
     let bin = rce_cell_content.as_slice();
 
