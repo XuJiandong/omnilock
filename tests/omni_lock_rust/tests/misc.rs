@@ -37,6 +37,7 @@ use sparse_merkle_tree::{SparseMerkleTree, H256};
 use ckb_chain_spec::consensus::ConsensusBuilder;
 use ckb_script::TransactionScriptsVerifier;
 use ckb_types::core::hardfork::HardForks;
+use ed25519_dalek::SigningKey;
 use omni_lock_test::omni_lock;
 use omni_lock_test::omni_lock::OmniLockWitnessLock;
 use omni_lock_test::schemas::basic::{Message, SighashAll, SighashAllOnly};
@@ -551,7 +552,7 @@ pub fn sign_tx_by_input_group(
         .enumerate()
         .map(|(i, _)| {
             if i == begin_index {
-                let message = if use_chain_confg(config.id.flags) {
+                let message = if use_chain_config(config.id.flags) {
                     assert!(config.chain_config.is_some());
                     config.chain_config.as_ref().unwrap().convert_message(&message)
                 } else {
@@ -590,7 +591,28 @@ pub fn sign_tx_by_input_group(
                 } else if config.id.flags == IDENTITY_FLAGS_MULTISIG {
                     let sig = config.multisig.sign(&message.into());
                     gen_witness_lock(sig, config.use_rc, config.use_rc_identity, &proof_vec, &identity, None)
-                } else if use_chain_confg(config.id.flags) {
+                } else if config.id.flags == IDENTITY_FLAGS_SOLANA {
+                    // name conflicted
+                    use ed25519_dalek::Signer;
+                    // solana has different signing process and algorithm
+                    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+                    let msg = String::from("CKB transaction: 0x") + &hex::encode(message);
+                    println!("message to be signed by ed25519: {}", msg);
+                    let sig = signing_key.sign(msg.as_bytes());
+                    let verifying_key = signing_key.verifying_key();
+
+                    let mut sig_plus_pubkey = sig.to_vec();
+                    sig_plus_pubkey.extend(verifying_key.to_bytes());
+                    let sig_plus_pubkey: Bytes = sig_plus_pubkey.into();
+                    gen_witness_lock(
+                        sig_plus_pubkey,
+                        config.use_rc,
+                        config.use_rc_identity,
+                        &proof_vec,
+                        &identity,
+                        None,
+                    )
+                } else if use_chain_config(config.id.flags) {
                     let sig_bytes = config.chain_config.as_ref().unwrap().sign(&config.private_key, message);
                     println!("bitcoin sign(size: {}): {:02x?}", sig_bytes.len(), sig_bytes.to_vec());
                     gen_witness_lock(sig_bytes, config.use_rc, config.use_rc_identity, &proof_vec, &identity, None)
@@ -858,6 +880,7 @@ pub const IDENTITY_FLAGS_BITCOIN: u8 = 4;
 pub const IDENTITY_FLAGS_DOGECOIN: u8 = 5;
 pub const IDENTITY_FLAGS_MULTISIG: u8 = 6;
 pub const IDENTITY_FLAGS_ETHEREUM_DISPLAYING: u8 = 18;
+pub const IDENTITY_FLAGS_SOLANA: u8 = 19;
 
 pub const IDENTITY_FLAGS_OWNER_LOCK: u8 = 0xFC;
 pub const IDENTITY_FLAGS_EXEC: u8 = 0xFD;
@@ -975,7 +998,7 @@ pub trait ChainConfig {
     fn sign(&self, privkey: &Privkey, message: CkbH256) -> Bytes;
 }
 
-pub fn use_chain_confg(flags: u8) -> bool {
+pub fn use_chain_config(flags: u8) -> bool {
     flags == IDENTITY_FLAGS_ETHEREUM
         || flags == IDENTITY_FLAGS_EOS
         || flags == IDENTITY_FLAGS_TRON
@@ -1260,6 +1283,7 @@ pub struct TestConfig {
     pub custom_extension_witnesses: Option<Vec<Bytes>>,
     pub custom_extension_witnesses_beginning: Option<Vec<Bytes>>,
     pub random_tx: bool,
+    pub solana_secret_key: [u8; 32],
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -1359,6 +1383,7 @@ impl TestConfig {
             custom_extension_witnesses: None,
             custom_extension_witnesses_beginning: None,
             random_tx: true,
+            solana_secret_key: [0u8; 32],
         }
     }
 

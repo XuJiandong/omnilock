@@ -22,6 +22,7 @@ use ckb_types::{
     prelude::*,
     H256,
 };
+use ed25519_dalek::SigningKey;
 use lazy_static::lazy_static;
 use misc::*;
 use omni_lock_test::schemas::{basic::*, blockchain::WitnessArgsBuilder, top_level::*};
@@ -539,6 +540,30 @@ fn test_eth_displaying_unlock() {
 
     let mut config = TestConfig::new(IDENTITY_FLAGS_ETHEREUM_DISPLAYING, false);
     config.set_chain_config(Box::new(EthereumDisplayConfig::default()));
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_solana_unlock() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.solana_secret_key = [0x01u8; 32];
+    config.sig_len = 96;
+
+    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+    let verifying_key = signing_key.verifying_key();
+    let blake160 = blake160(&verifying_key.to_bytes());
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
 
     let tx = gen_tx(&mut data_loader, &mut config);
     let tx = sign_tx(&mut data_loader, tx, &mut config);
