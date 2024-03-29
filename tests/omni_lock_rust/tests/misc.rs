@@ -592,26 +592,38 @@ pub fn sign_tx_by_input_group(
                     let sig = config.multisig.sign(&message.into());
                     gen_witness_lock(sig, config.use_rc, config.use_rc_identity, &proof_vec, &identity, None)
                 } else if config.id.flags == IDENTITY_FLAGS_SOLANA {
-                    // name conflicted
-                    use ed25519_dalek::Signer;
-                    // solana has different signing process and algorithm
-                    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
-                    let msg = String::from("CKB transaction: 0x") + &hex::encode(message);
-                    println!("message to be signed by ed25519: {}", msg);
-                    let sig = signing_key.sign(msg.as_bytes());
-                    let verifying_key = signing_key.verifying_key();
+                    if let Some(sig) = config.solana_phantom_sig.clone() {
+                        let sig_plus_pubkey: Bytes = sig.into();
+                        gen_witness_lock(
+                            sig_plus_pubkey,
+                            config.use_rc,
+                            config.use_rc_identity,
+                            &proof_vec,
+                            &identity,
+                            None,
+                        )
+                    } else {
+                        // name conflicted
+                        use ed25519_dalek::Signer;
+                        // solana has different signing process and algorithm
+                        let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+                        let msg = String::from("CKB transaction: 0x") + &hex::encode(message);
+                        println!("message to be signed by ed25519: {}", msg);
+                        let sig = signing_key.sign(msg.as_bytes());
+                        let verifying_key = signing_key.verifying_key();
 
-                    let mut sig_plus_pubkey = sig.to_vec();
-                    sig_plus_pubkey.extend(verifying_key.to_bytes());
-                    let sig_plus_pubkey: Bytes = sig_plus_pubkey.into();
-                    gen_witness_lock(
-                        sig_plus_pubkey,
-                        config.use_rc,
-                        config.use_rc_identity,
-                        &proof_vec,
-                        &identity,
-                        None,
-                    )
+                        let mut sig_plus_pubkey = sig.to_vec();
+                        sig_plus_pubkey.extend(verifying_key.to_bytes());
+                        let sig_plus_pubkey: Bytes = sig_plus_pubkey.into();
+                        gen_witness_lock(
+                            sig_plus_pubkey,
+                            config.use_rc,
+                            config.use_rc_identity,
+                            &proof_vec,
+                            &identity,
+                            None,
+                        )
+                    }
                 } else if use_chain_config(config.id.flags) {
                     let sig_bytes = config.chain_config.as_ref().unwrap().sign(&config.private_key, message);
                     println!("bitcoin sign(size: {}): {:02x?}", sig_bytes.len(), sig_bytes.to_vec());
@@ -1284,6 +1296,7 @@ pub struct TestConfig {
     pub custom_extension_witnesses_beginning: Option<Vec<Bytes>>,
     pub random_tx: bool,
     pub solana_secret_key: [u8; 32],
+    pub solana_phantom_sig: Option<Vec<u8>>,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -1384,6 +1397,7 @@ impl TestConfig {
             custom_extension_witnesses_beginning: None,
             random_tx: true,
             solana_secret_key: [0u8; 32],
+            solana_phantom_sig: None,
         }
     }
 

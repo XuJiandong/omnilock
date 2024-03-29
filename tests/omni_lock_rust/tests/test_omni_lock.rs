@@ -575,6 +575,58 @@ fn test_solana_unlock() {
     verify_result.expect("pass verification");
 }
 
+/// Steps to update this test case:
+///
+/// 1. Install Phantom wallet from: [Phantom Wallet](https://phantom.app/)
+/// 2. Create an account on the wallet and obtain the Solana address. Update it
+///    to the variable `address`.
+/// 3. Run `cargo test test_solana_phantom_wallet -- --nocapture`. Find the
+///    message to sign, for example:
+///    ```
+///    Message to be signed by ed25519: CKB transaction:
+///    0x761f6986168340c33dfe016c7274fc30b3339d6d29dacc594f93addc700704fe
+///    ```
+/// 4. Sign the message using [Phantom's message signing functionality](https://docs.phantom.app/solana/signing-a-message), e.g.:
+///    ```
+///    provider.signMessage(new TextEncoder().encode("CKB transaction:
+///    0x761f6986168340c33dfe016c7274fc30b3339d6d29dacc594f93addc700704fe"),
+///    "utf8")
+///    ```
+/// 5. Update the variable `sig` with the obtained signature.
+///
+#[test]
+fn test_solana_phantom_wallet() {
+    let mut data_loader = DummyDataLoader::new();
+    let address = "FK577f9qN4jiUJkQoiXvjuCcwmwLmB3sWwzBzX3ij8wG";
+    let mut sig = vec![
+        139, 30, 199, 50, 16, 72, 145, 222, 75, 218, 182, 90, 47, 14, 110, 181, 226, 204, 15, 118, 122, 239, 221, 181,
+        120, 164, 215, 252, 0, 72, 232, 235, 80, 74, 74, 107, 48, 10, 90, 145, 212, 44, 198, 233, 76, 253, 51, 91, 235,
+        252, 117, 77, 242, 40, 68, 155, 143, 28, 252, 98, 94, 179, 6, 0,
+    ];
+
+    let verifying_key = bs58::decode(address).into_vec().unwrap();
+    sig.extend(verifying_key.clone());
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.random_tx = false;
+    config.sig_len = 96;
+
+    let blake160 = blake160(&verifying_key);
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
+    assert_eq!(sig.len(), 96);
+    config.solana_phantom_sig = Some(sig);
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
 // this test can fail during development
 // TODO: enable it when ready
 #[test]
