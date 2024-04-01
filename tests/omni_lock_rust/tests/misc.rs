@@ -645,13 +645,13 @@ pub fn sign_tx_by_input_group(
                                 .build();
                             let sighash_all = WitnessLayout::new_builder().set(sighash_all).build();
                             let sighash_all = sighash_all.as_bytes();
-                            println!(
-                                "sighash_all with enum id(size: {}): {:02x?}",
-                                sighash_all.len(),
-                                sighash_all.as_ref()
-                            );
+                            // println!(
+                            //     "sighash_all with enum id(size: {}): {:02x?}",
+                            //     sighash_all.len(),
+                            //     sighash_all.as_ref()
+                            // );
                             let res = sighash_all.pack();
-                            println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
+                            // println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
                             res
                         }
                         None => {
@@ -660,13 +660,13 @@ pub fn sign_tx_by_input_group(
                                 .build();
                             let sighash_all_only = WitnessLayout::new_builder().set(sighash_all_only).build();
                             let sighash_all_only = sighash_all_only.as_bytes();
-                            println!(
-                                "sighash_all_only with enum id(size: {}): {:02x?}",
-                                sighash_all_only.len(),
-                                sighash_all_only.as_ref()
-                            );
+                            // println!(
+                            //     "sighash_all_only with enum id(size: {}): {:02x?}",
+                            //     sighash_all_only.len(),
+                            //     sighash_all_only.as_ref()
+                            // );
                             let res = sighash_all_only.pack();
-                            println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
+                            // println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
                             res
                         }
                     }

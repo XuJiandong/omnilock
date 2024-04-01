@@ -374,6 +374,9 @@ fn test_cobuild_btc_success(vtype: u8) {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
+    let cycles = verify_result.clone().unwrap();
+    // about ~1429386
+    assert!(cycles < 1500000);
     verify_result.expect("pass verification");
 }
 
@@ -874,6 +877,10 @@ fn test_cobuild_sighash_all_only() {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
+    let cycles = (&verify_result).as_ref().unwrap();
+    println!("cycles = {}", *cycles);
+    // about ~1397402
+    assert!(*cycles < 1410000);
     verify_result.expect("pass verification");
 }
 
@@ -1009,18 +1016,18 @@ fn test_cobuild_big_message() {
     let always_success_script_opt = ScriptOpt::new_builder().set(Some(always_success_script)).build();
 
     let mut action_vec = Vec::<Action>::new();
-    for _ in 0..3072 {
+    for _ in 0..12 {
         let action_builder = Action::new_builder();
         let action_builder =
             action_builder.script_info_hash(ckb_types::packed::Byte32::from_slice(&[0x00; 32]).unwrap());
         let action_builder = action_builder.script_hash(always_success_script_hash.clone());
-        let action_builder = action_builder.data(vec![0x42; 128].pack());
+        let action_builder = action_builder.data(vec![0x42; 1024 * 40].pack());
         let action = action_builder.build();
         action_vec.push(action);
     }
     let action_vec = ActionVec::new_builder().extend(action_vec).build();
     let message = Message::new_builder().actions(action_vec).build();
-    config.cobuild_message = Some(message); // Message is 651300 bytes in molecule type.
+    config.cobuild_message = Some(message); // Message is 500K bytes in molecule type.
 
     config.set_chain_config(Box::new(BitcoinConfig { sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED, pubkey_err: false }));
 
@@ -1045,6 +1052,9 @@ fn test_cobuild_big_message() {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
+    let cycles = verify_result.as_ref().unwrap();
+    println!("cycles = {}", *cycles);
+    assert!(*cycles < 16_000_000);
     verify_result.expect("pass verification");
 }
 
