@@ -209,7 +209,8 @@ int new_otx_blake2b(blake2b_state *S) {
 }
 
 static inline int get_witness_layout(BytesVecType witnesses, uint32_t index,
-                                     WitnessLayoutType *witness_layout) {
+                                     WitnessLayoutType *witness_layout,
+                                     bool verify_recursively) {
   bool existing = false;
   mol2_cursor_t witness = witnesses.t->get(&witnesses, index, &existing);
   if (!existing) {
@@ -217,7 +218,7 @@ static inline int get_witness_layout(BytesVecType witnesses, uint32_t index,
   }
 
   WitnessLayoutType witness_layout2 = make_WitnessLayout(&witness);
-  if (verify_WitnessLayout(&witness_layout2)) {
+  if (verify_WitnessLayout(&witness_layout2, verify_recursively)) {
     return COBUILD_ERROR_GENERAL;
   }
   if (witness_layout != NULL) {
@@ -248,7 +249,7 @@ int ckb_fetch_sighash_message(BytesVecType witnesses, MessageType *message) {
   uint32_t witness_len = witnesses.t->len(&witnesses);
   for (uint32_t index = 0; index < witness_len; index++) {
     WitnessLayoutType witness_layout = {0};
-    if (get_witness_layout(witnesses, index, &witness_layout) == 0) {
+    if (get_witness_layout(witnesses, index, &witness_layout, false) == 0) {
       uint32_t id = witness_layout.t->item_id(&witness_layout);
       if (id == WitnessLayoutSighashAll) {
         // tested by:
@@ -280,7 +281,7 @@ static inline int ckb_fetch_otx_start(BytesVecType witnesses, bool *has_otx,
   uint32_t witness_len = witnesses.t->len(&witnesses);
   for (uint32_t index = 0; index < witness_len; index++) {
     WitnessLayoutType witness_layout = {0};
-    err = get_witness_layout(witnesses, index, &witness_layout);
+    err = get_witness_layout(witnesses, index, &witness_layout, false);
     if (err == 0) {
       uint32_t id = witness_layout.t->item_id(&witness_layout);
       if (id == WitnessLayoutOtxStart) {
@@ -398,7 +399,7 @@ int ckb_generate_smh(const Env *env, mol2_cursor_t message_cursor,
     CKB_COBUILD_CHECK(err);
   }
   blake2b_final(&ctx, smh, BLAKE2B_BLOCK_SIZE);
-  printf("ckb_generate_smh total hashed %d bytes", count);
+  printf("ckb_generate_smh total hashed %zu bytes", count);
 
 exit:
   return err;
@@ -532,7 +533,7 @@ int ckb_cobuild_normal_entry(const Env *env, ScriptEntryType callback) {
                                  CKB_SOURCE_GROUP_INPUT);
     CKB_COBUILD_CHECK(err);
     WitnessLayoutType witness_layout = make_WitnessLayout(&witness);
-    CKB_COBUILD_CHECK2(!verify_WitnessLayout(&witness_layout),
+    CKB_COBUILD_CHECK2(!verify_WitnessLayout(&witness_layout, false),
                        COBUILD_ERROR_SIGHASHALL_NOSEAL);
 
     uint32_t id = witness_layout.t->item_id(&witness_layout);
@@ -691,7 +692,7 @@ int ckb_generate_otx_smh(const Env *env, mol2_cursor_t message_cursor,
     err = ckb_hash_cursor(&ctx, header_dep_cursor);
     count += header_dep_cursor.size;
   }
-  printf("ckb_generate_otx_smh totally hashed %d bytes", count);
+  printf("ckb_generate_otx_smh totally hashed %zu bytes", count);
   blake2b_final(&ctx, smh, BLAKE2B_BLOCK_SIZE);
 exit:
   return err;
@@ -712,9 +713,10 @@ int ckb_cobuild_entry(const Env *env, ScriptEntryType callback,
   // Legacy Flow Handling
   *cobuild_enabled = false;
   for (uint32_t i = 0; i < witness_len; i++) {
-    if (get_witness_layout(witnesses, i, NULL) == 0) {
+    if (get_witness_layout(witnesses, i, NULL, true) == 0) {
       *cobuild_enabled = true;
-      break;
+      // Do not break here. All witnesses are recursively verified at this
+      // point. Subsequent witnesses will not be recursively verified.
     }
   }
   if (!*cobuild_enabled) {
@@ -749,7 +751,7 @@ int ckb_cobuild_entry(const Env *env, ScriptEntryType callback,
   printf("Otx starts at index %d(inclusive)", index);
   for (; index < witness_len; index++) {
     WitnessLayoutType witness_layout = {0};
-    err = get_witness_layout(witnesses, index, &witness_layout);
+    err = get_witness_layout(witnesses, index, &witness_layout, false);
     if (err != 0) {
       // step 6, not WitnessLayoutOtx
       break;
@@ -861,7 +863,7 @@ int ckb_cobuild_entry(const Env *env, ScriptEntryType callback,
     // [0, i) [j, +infinity)
     if (index < i || index >= j) {
       WitnessLayoutType witness_layout = {0};
-      err = get_witness_layout(witnesses, index, &witness_layout);
+      err = get_witness_layout(witnesses, index, &witness_layout, false);
       if (err == 0) {
         // test_cobuild_otx_noexistent_otx_id
         uint32_t id = witness_layout.t->item_id(&witness_layout);
@@ -883,7 +885,7 @@ int ckb_cobuild_entry(const Env *env, ScriptEntryType callback,
       CKB_COBUILD_CHECK_LOOP(err);
       if (memcmp(hash, env->current_script_hash, sizeof(hash)) == 0) {
         printf(
-            "Same lock script found beyond otx, at index %d. "
+            "Same lock script found beyond otx, at index %zu. "
             "ckb_cobuild_normal_entry called.",
             index);
         found = true;
@@ -898,7 +900,7 @@ int ckb_cobuild_entry(const Env *env, ScriptEntryType callback,
     CKB_COBUILD_CHECK(err);
   }
   CKB_COBUILD_CHECK2(execution_count > 0, COBUILD_ERROR_NO_CALLBACK);
-  printf("execution_count = %d", execution_count);
+  printf("execution_count = %zu", execution_count);
 exit:
   return err;
 }

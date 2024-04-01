@@ -17,7 +17,7 @@ typedef enum WitnessLayoutId {
 } WitnessLayoutId;
 
 int verify_WitnessArgs(WitnessArgsType *witness);
-int verify_WitnessLayout(WitnessLayoutType *witness);
+int verify_WitnessLayout(WitnessLayoutType *witness, bool recursive);
 
 #ifndef MOLECULEC_C2_DECLARATION_ONLY
 
@@ -177,28 +177,44 @@ int get_union_id(mol2_cursor_t *cur, uint32_t *union_id) {
   return MOL2_OK;
 }
 
-int verify_WitnessLayout(WitnessLayoutType *witness) {
+int verify_WitnessLayout(WitnessLayoutType *witness, bool recursive) {
   int err = MOL2_OK;
   uint32_t union_id = 0;
-  CHECK(get_union_id(&witness->cur, &union_id));
-
+  err = get_union_id(&witness->cur, &union_id);
+  CHECK(err);
   switch (union_id) {
     case WitnessLayoutSighashAll: {
-      SighashAllType sighash_all = witness->t->as_SighashAll(witness);
-      return verify_SighashAll(&sighash_all);
+      if (recursive) {
+        SighashAllType sighash_all = witness->t->as_SighashAll(witness);
+        err = verify_SighashAll(&sighash_all);
+        CHECK(err);
+      }
+      break;
     }
     case WitnessLayoutSighashAllOnly: {
-      SighashAllOnlyType sighash_all_only =
-          witness->t->as_SighashAllOnly(witness);
-      return verify_SighashAllOnly(&sighash_all_only);
+      if (recursive) {
+        SighashAllOnlyType sighash_all_only =
+            witness->t->as_SighashAllOnly(witness);
+        err = verify_SighashAllOnly(&sighash_all_only);
+        CHECK(err);
+      }
+      break;
     }
     case WitnessLayoutOtx: {
-      OtxType otx = witness->t->as_Otx(witness);
-      return verify_Otx(&otx);
+      if (recursive) {
+        OtxType otx = witness->t->as_Otx(witness);
+        err = verify_Otx(&otx);
+        CHECK(err);
+      }
+      break;
     }
     case WitnessLayoutOtxStart: {
-      OtxStartType otx_start = witness->t->as_OtxStart(witness);
-      return verify_OtxStart(&otx_start);
+      if (recursive) {
+        OtxStartType otx_start = witness->t->as_OtxStart(witness);
+        err = verify_OtxStart(&otx_start);
+        CHECK(err);
+      }
+      break;
     }
     default: {
       return MOL2_ERR_UNKNOWN_ITEM;

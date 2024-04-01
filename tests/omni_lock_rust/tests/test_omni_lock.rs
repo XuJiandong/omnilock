@@ -879,8 +879,8 @@ fn test_cobuild_sighash_all_only() {
     let verify_result = verifier.verify(MAX_CYCLES);
     let cycles = (&verify_result).as_ref().unwrap();
     println!("cycles = {}", *cycles);
-    // about ~1397402
-    assert!(*cycles < 1410000);
+    // about ~1419872
+    assert!(*cycles < 1430000);
     verify_result.expect("pass verification");
 }
 
