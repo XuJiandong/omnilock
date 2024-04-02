@@ -578,6 +578,56 @@ fn test_solana_unlock() {
     verify_result.expect("pass verification");
 }
 
+#[test]
+fn test_solana_wrong_pubkey() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.solana_secret_key = [0x01u8; 32];
+    config.sig_len = 96;
+    config.scheme = TestScheme::SolanaWrongPubkey;
+
+    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+    let verifying_key = signing_key.verifying_key();
+    let blake160 = blake160(&verifying_key.to_bytes());
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert_script_error(verify_result.unwrap_err(), ERROR_MISMATCHED);
+}
+
+#[test]
+fn test_solana_wrong_signature() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.solana_secret_key = [0x01u8; 32];
+    config.sig_len = 96;
+    config.scheme = TestScheme::SolanaWrongSignature;
+
+    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+    let verifying_key = signing_key.verifying_key();
+    let blake160 = blake160(&verifying_key.to_bytes());
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert_script_error(verify_result.unwrap_err(), ERROR_MISMATCHED);
+}
+
 /// Steps to update this test case:
 ///
 /// 1. Install Phantom wallet from: [Phantom Wallet](https://phantom.app/)

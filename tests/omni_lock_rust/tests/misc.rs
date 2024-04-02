@@ -91,6 +91,7 @@ pub const ERROR_SIGHASHALL_DUP: i8 = 113;
 pub const MOL2_ERR_OVERFLOW: i8 = 8; // parse witnesses error
 
 pub const ERROR_IDENTITY_WRONG_ARGS: i8 = 71;
+pub const ERROR_MISMATCHED: i8 = 73;
 pub const ERROR_ARGS_FORMAT: i8 = 87;
 
 // https://github.com/bitcoin-core/secp256k1/blob/d373bf6d08c82ac5496bf8103698c9f54d8d99d2/include/secp256k1.h#L219
@@ -613,7 +614,19 @@ pub fn sign_tx_by_input_group(
                         let verifying_key = signing_key.verifying_key();
 
                         let mut sig_plus_pubkey = sig.to_vec();
+                        match config.scheme {
+                            TestScheme::SolanaWrongSignature => {
+                                sig_plus_pubkey[0] ^= 1;
+                            }
+                            _ => {}
+                        }
                         sig_plus_pubkey.extend(verifying_key.to_bytes());
+                        match config.scheme {
+                            TestScheme::SolanaWrongPubkey => {
+                                sig_plus_pubkey[64] ^= 1;
+                            }
+                            _ => {}
+                        }
                         let sig_plus_pubkey: Bytes = sig_plus_pubkey.into();
                         gen_witness_lock(
                             sig_plus_pubkey,
@@ -1318,6 +1331,8 @@ pub enum TestScheme {
     OwnerLockWithoutWitness,
 
     RsaWrongSignature,
+    SolanaWrongSignature,
+    SolanaWrongPubkey,
 }
 
 #[derive(Copy, Clone, PartialEq)]
