@@ -491,6 +491,14 @@ exit:
 static int parse_seal(const mol2_cursor_t original_seal, mol2_cursor_t *seal,
                       uint8_t *message_calculation_flow) {
   int err = 0;
+  // message calculation flow is not part of cobuild protocol.
+  // Some of lock scripts may need this.
+#ifdef DISABLE_MESSAGE_CALCULATION_FLOW
+  *seal = original_seal;
+  *message_calculation_flow = 0;
+  return 0;
+#endif
+
   uint32_t prefix_length = 1;
   uint8_t prefix[1] = {0};
 
