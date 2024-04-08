@@ -683,7 +683,6 @@ fn test_solana_phantom_wallet() {
 // this test can fail during development
 // TODO: enable it when ready
 #[test]
-#[ignore]
 fn test_binary_unchanged() {
     let mut buf = [0u8; 8 * 1024];
     // build hash
@@ -703,7 +702,7 @@ fn test_binary_unchanged() {
     blake2b.finalize(&mut hash);
 
     let actual_hash = faster_hex::hex_string(&hash);
-    assert_eq!("ffc1ed16066f76ac2b9e5634c482aa05e9b34860c53ae79615d2a65679dad06f", &actual_hash);
+    assert_eq!("3f303aa87238dbc34a81a1c42109e07aad9c8e4ab3e8741d87fffca43851b2d7", &actual_hash);
 }
 
 #[test]
