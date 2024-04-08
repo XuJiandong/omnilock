@@ -22,6 +22,7 @@ use ckb_types::{
     prelude::*,
     H256,
 };
+use ed25519_dalek::SigningKey;
 use lazy_static::lazy_static;
 use misc::*;
 use omni_lock_test::schemas::{basic::*, blockchain::WitnessArgsBuilder, top_level::*};
@@ -373,6 +374,9 @@ fn test_cobuild_btc_success(vtype: u8) {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
+    let cycles = verify_result.clone().unwrap();
+    // about ~1429386
+    assert!(cycles < 1500000);
     verify_result.expect("pass verification");
 }
 
@@ -539,6 +543,132 @@ fn test_eth_displaying_unlock() {
 
     let mut config = TestConfig::new(IDENTITY_FLAGS_ETHEREUM_DISPLAYING, false);
     config.set_chain_config(Box::new(EthereumDisplayConfig::default()));
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_solana_unlock() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.solana_secret_key = [0x01u8; 32];
+    config.sig_len = 96;
+
+    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+    let verifying_key = signing_key.verifying_key();
+    let blake160 = blake160(&verifying_key.to_bytes());
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    verify_result.expect("pass verification");
+}
+
+#[test]
+fn test_solana_wrong_pubkey() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.solana_secret_key = [0x01u8; 32];
+    config.sig_len = 96;
+    config.scheme = TestScheme::SolanaWrongPubkey;
+
+    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+    let verifying_key = signing_key.verifying_key();
+    let blake160 = blake160(&verifying_key.to_bytes());
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert_script_error(verify_result.unwrap_err(), ERROR_MISMATCHED);
+}
+
+#[test]
+fn test_solana_wrong_signature() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.solana_secret_key = [0x01u8; 32];
+    config.sig_len = 96;
+    config.scheme = TestScheme::SolanaWrongSignature;
+
+    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+    let verifying_key = signing_key.verifying_key();
+    let blake160 = blake160(&verifying_key.to_bytes());
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let mut verifier = verify_tx(resolved_tx, data_loader);
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert_script_error(verify_result.unwrap_err(), ERROR_MISMATCHED);
+}
+
+/// Steps to update this test case:
+///
+/// 1. Install Phantom wallet from: [Phantom Wallet](https://phantom.app/)
+/// 2. Create an account on the wallet and obtain the Solana address. Update it
+///    to the variable `address`.
+/// 3. Run `cargo test test_solana_phantom_wallet -- --nocapture`. Find the
+///    message to sign, for example:
+///    ```
+///    Message to be signed by ed25519: CKB transaction:
+///    0x761f6986168340c33dfe016c7274fc30b3339d6d29dacc594f93addc700704fe
+///    ```
+/// 4. Sign the message using [Phantom's message signing functionality](https://docs.phantom.app/solana/signing-a-message), e.g.:
+///    ```
+///    provider.signMessage(new TextEncoder().encode("CKB transaction:
+///    0x761f6986168340c33dfe016c7274fc30b3339d6d29dacc594f93addc700704fe"),
+///    "utf8")
+///    ```
+/// 5. Update the variable `sig` with the obtained signature.
+///
+#[test]
+fn test_solana_phantom_wallet() {
+    let mut data_loader = DummyDataLoader::new();
+    let address = "FK577f9qN4jiUJkQoiXvjuCcwmwLmB3sWwzBzX3ij8wG";
+    let mut sig = vec![
+        139, 30, 199, 50, 16, 72, 145, 222, 75, 218, 182, 90, 47, 14, 110, 181, 226, 204, 15, 118, 122, 239, 221, 181,
+        120, 164, 215, 252, 0, 72, 232, 235, 80, 74, 74, 107, 48, 10, 90, 145, 212, 44, 198, 233, 76, 253, 51, 91, 235,
+        252, 117, 77, 242, 40, 68, 155, 143, 28, 252, 98, 94, 179, 6, 0,
+    ];
+
+    let verifying_key = bs58::decode(address).into_vec().unwrap();
+    sig.extend(verifying_key.clone());
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.random_tx = false;
+    config.sig_len = 96;
+
+    let blake160 = blake160(&verifying_key);
+    let auth = Identity { flags: IDENTITY_FLAGS_SOLANA, blake160 };
+    config.id = auth;
+    assert_eq!(sig.len(), 96);
+    config.solana_phantom_sig = Some(sig);
 
     let tx = gen_tx(&mut data_loader, &mut config);
     let tx = sign_tx(&mut data_loader, tx, &mut config);
@@ -797,6 +927,10 @@ fn test_cobuild_sighash_all_only() {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
+    let cycles = (&verify_result).as_ref().unwrap();
+    println!("cycles = {}", *cycles);
+    // about ~1419872
+    assert!(*cycles < 1430000);
     verify_result.expect("pass verification");
 }
 
@@ -932,18 +1066,18 @@ fn test_cobuild_big_message() {
     let always_success_script_opt = ScriptOpt::new_builder().set(Some(always_success_script)).build();
 
     let mut action_vec = Vec::<Action>::new();
-    for _ in 0..3072 {
+    for _ in 0..12 {
         let action_builder = Action::new_builder();
         let action_builder =
             action_builder.script_info_hash(ckb_types::packed::Byte32::from_slice(&[0x00; 32]).unwrap());
         let action_builder = action_builder.script_hash(always_success_script_hash.clone());
-        let action_builder = action_builder.data(vec![0x42; 128].pack());
+        let action_builder = action_builder.data(vec![0x42; 1024 * 40].pack());
         let action = action_builder.build();
         action_vec.push(action);
     }
     let action_vec = ActionVec::new_builder().extend(action_vec).build();
     let message = Message::new_builder().actions(action_vec).build();
-    config.cobuild_message = Some(message); // Message is 651300 bytes in molecule type.
+    config.cobuild_message = Some(message); // Message is 500K bytes in molecule type.
 
     config.set_chain_config(Box::new(BitcoinConfig { sign_vtype: BITCOIN_V_TYPE_P2PKHCOMPRESSED, pubkey_err: false }));
 
@@ -968,6 +1102,9 @@ fn test_cobuild_big_message() {
     let mut verifier = verify_tx(resolved_tx, data_loader);
     verifier.set_debug_printer(debug_printer);
     let verify_result = verifier.verify(MAX_CYCLES);
+    let cycles = verify_result.as_ref().unwrap();
+    println!("cycles = {}", *cycles);
+    assert!(*cycles < 16_000_000);
     verify_result.expect("pass verification");
 }
 

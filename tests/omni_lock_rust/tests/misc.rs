@@ -25,7 +25,7 @@ use ckb_types::{
     H256 as CkbH256,
 };
 use lazy_static::lazy_static;
-use rand::prelude::{thread_rng, ThreadRng};
+use rand::prelude::thread_rng;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use rand::RngCore;
@@ -37,6 +37,7 @@ use sparse_merkle_tree::{SparseMerkleTree, H256};
 use ckb_chain_spec::consensus::ConsensusBuilder;
 use ckb_script::TransactionScriptsVerifier;
 use ckb_types::core::hardfork::HardForks;
+use ed25519_dalek::SigningKey;
 use omni_lock_test::omni_lock;
 use omni_lock_test::omni_lock::OmniLockWitnessLock;
 use omni_lock_test::schemas::basic::{Message, SighashAll, SighashAllOnly};
@@ -90,6 +91,7 @@ pub const ERROR_SIGHASHALL_DUP: i8 = 113;
 pub const MOL2_ERR_OVERFLOW: i8 = 8; // parse witnesses error
 
 pub const ERROR_IDENTITY_WRONG_ARGS: i8 = 71;
+pub const ERROR_MISMATCHED: i8 = 73;
 pub const ERROR_ARGS_FORMAT: i8 = 87;
 
 // https://github.com/bitcoin-core/secp256k1/blob/d373bf6d08c82ac5496bf8103698c9f54d8d99d2/include/secp256k1.h#L219
@@ -153,15 +155,6 @@ pub fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
         smt.update(key, value).unwrap();
     }
     smt
-}
-
-pub fn gen_random_out_point(rng: &mut ThreadRng) -> OutPoint {
-    let hash = {
-        let mut buf = [0u8; 32];
-        rng.fill(&mut buf);
-        Pack::pack(&buf)
-    };
-    OutPoint::new(hash, 0)
 }
 
 //
@@ -437,7 +430,7 @@ pub fn append_rc(
 ) -> TransactionBuilder {
     let smt_key = config.id.to_smt_key();
     let (proofs, rc_datas, proof_masks) = generate_proofs(config.scheme, &vec![smt_key]);
-    let (rc_root, b0) = generate_rce_cell(dummy, tx_builder, rc_datas, config.smt_in_input);
+    let (rc_root, b0) = generate_rce_cell(dummy, tx_builder, rc_datas, config.smt_in_input, config);
 
     config.proofs = proofs;
     config.proof_masks = proof_masks;
@@ -454,11 +447,14 @@ pub fn append_rc(
 pub fn append_input_lock_script_hash(
     dummy: &mut DummyDataLoader,
     tx_builder: TransactionBuilder,
+    config: &TestConfig,
 ) -> (TransactionBuilder, Bytes) {
     let mut rng = thread_rng();
     let previous_tx_hash = {
-        let mut buf = [0u8; 32];
-        rng.fill(&mut buf);
+        let mut buf = [3u8; 32];
+        if config.random_tx {
+            rng.fill(&mut buf);
+        }
         buf.pack()
     };
     let previous_out_point = OutPoint::new(previous_tx_hash, 0);
@@ -557,7 +553,7 @@ pub fn sign_tx_by_input_group(
         .enumerate()
         .map(|(i, _)| {
             if i == begin_index {
-                let message = if use_chain_confg(config.id.flags) {
+                let message = if use_chain_config(config.id.flags) {
                     assert!(config.chain_config.is_some());
                     config.chain_config.as_ref().unwrap().convert_message(&message)
                 } else {
@@ -596,7 +592,52 @@ pub fn sign_tx_by_input_group(
                 } else if config.id.flags == IDENTITY_FLAGS_MULTISIG {
                     let sig = config.multisig.sign(&message.into());
                     gen_witness_lock(sig, config.use_rc, config.use_rc_identity, &proof_vec, &identity, None)
-                } else if use_chain_confg(config.id.flags) {
+                } else if config.id.flags == IDENTITY_FLAGS_SOLANA {
+                    if let Some(sig) = config.solana_phantom_sig.clone() {
+                        let sig_plus_pubkey: Bytes = sig.into();
+                        gen_witness_lock(
+                            sig_plus_pubkey,
+                            config.use_rc,
+                            config.use_rc_identity,
+                            &proof_vec,
+                            &identity,
+                            None,
+                        )
+                    } else {
+                        // name conflicted
+                        use ed25519_dalek::Signer;
+                        // solana has different signing process and algorithm
+                        let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+                        let msg = String::from("CKB transaction: 0x") + &hex::encode(message);
+                        println!("message to be signed by ed25519: {}", msg);
+                        let sig = signing_key.sign(msg.as_bytes());
+                        let verifying_key = signing_key.verifying_key();
+
+                        let mut sig_plus_pubkey = sig.to_vec();
+                        match config.scheme {
+                            TestScheme::SolanaWrongSignature => {
+                                sig_plus_pubkey[0] ^= 1;
+                            }
+                            _ => {}
+                        }
+                        sig_plus_pubkey.extend(verifying_key.to_bytes());
+                        match config.scheme {
+                            TestScheme::SolanaWrongPubkey => {
+                                sig_plus_pubkey[64] ^= 1;
+                            }
+                            _ => {}
+                        }
+                        let sig_plus_pubkey: Bytes = sig_plus_pubkey.into();
+                        gen_witness_lock(
+                            sig_plus_pubkey,
+                            config.use_rc,
+                            config.use_rc_identity,
+                            &proof_vec,
+                            &identity,
+                            None,
+                        )
+                    }
+                } else if use_chain_config(config.id.flags) {
                     let sig_bytes = config.chain_config.as_ref().unwrap().sign(&config.private_key, message);
                     println!("bitcoin sign(size: {}): {:02x?}", sig_bytes.len(), sig_bytes.to_vec());
                     gen_witness_lock(sig_bytes, config.use_rc, config.use_rc_identity, &proof_vec, &identity, None)
@@ -617,13 +658,13 @@ pub fn sign_tx_by_input_group(
                                 .build();
                             let sighash_all = WitnessLayout::new_builder().set(sighash_all).build();
                             let sighash_all = sighash_all.as_bytes();
-                            println!(
-                                "sighash_all with enum id(size: {}): {:02x?}",
-                                sighash_all.len(),
-                                sighash_all.as_ref()
-                            );
+                            // println!(
+                            //     "sighash_all with enum id(size: {}): {:02x?}",
+                            //     sighash_all.len(),
+                            //     sighash_all.as_ref()
+                            // );
                             let res = sighash_all.pack();
-                            println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
+                            // println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
                             res
                         }
                         None => {
@@ -632,13 +673,13 @@ pub fn sign_tx_by_input_group(
                                 .build();
                             let sighash_all_only = WitnessLayout::new_builder().set(sighash_all_only).build();
                             let sighash_all_only = sighash_all_only.as_bytes();
-                            println!(
-                                "sighash_all_only with enum id(size: {}): {:02x?}",
-                                sighash_all_only.len(),
-                                sighash_all_only.as_ref()
-                            );
+                            // println!(
+                            //     "sighash_all_only with enum id(size: {}): {:02x?}",
+                            //     sighash_all_only.len(),
+                            //     sighash_all_only.as_ref()
+                            // );
                             let res = sighash_all_only.pack();
-                            println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
+                            // println!("res(size: {}): {:02x?}", res.len(), res.as_bytes().as_ref());
                             res
                         }
                     }
@@ -686,8 +727,10 @@ pub fn gen_tx_with_grouped_args(
     // setup sighash_all dep
     let sighash_all_out_point = {
         let contract_tx_hash = {
-            let mut buf = [0u8; 32];
-            rng.fill(&mut buf);
+            let mut buf = [1u8; 32];
+            if config.random_tx {
+                rng.fill(&mut buf);
+            }
             buf.pack()
         };
         OutPoint::new(contract_tx_hash.clone(), 0)
@@ -700,8 +743,10 @@ pub fn gen_tx_with_grouped_args(
     // always success
     let always_success_out_point = {
         let contract_tx_hash = {
-            let mut buf = [0u8; 32];
-            rng.fill(&mut buf);
+            let mut buf = [2u8; 32];
+            if config.random_tx {
+                rng.fill(&mut buf);
+            }
             buf.pack()
         };
         OutPoint::new(contract_tx_hash.clone(), 0)
@@ -725,7 +770,7 @@ pub fn gen_tx_with_grouped_args(
 
     if config.is_owner_lock() {
         // insert an "always success" script as first input script.
-        let (b0, blake160) = append_input_lock_script_hash(dummy, tx_builder);
+        let (b0, blake160) = append_input_lock_script_hash(dummy, tx_builder, &config);
         tx_builder = b0;
         config.id.blake160 = blake160;
     }
@@ -738,7 +783,9 @@ pub fn gen_tx_with_grouped_args(
         for _ in 0..inputs_size {
             let previous_tx_hash = {
                 let mut buf = [0u8; 32];
-                rng.fill(&mut buf);
+                if config.random_tx {
+                    rng.fill(&mut buf);
+                }
                 buf.pack()
             };
             args = if config.is_owner_lock() {
@@ -771,7 +818,9 @@ pub fn gen_tx_with_grouped_args(
             let mut random_extra_witness = Vec::<u8>::new();
             let witness_len = if config.scheme == TestScheme::LongWitness { 40000 } else { 32 };
             random_extra_witness.resize(witness_len, 0);
-            rng.fill(&mut random_extra_witness[..]);
+            if config.random_tx {
+                rng.fill(&mut random_extra_witness[..]);
+            }
 
             let witness_args = WitnessArgsBuilder::default()
                 .input_type(Some(Bytes::copy_from_slice(&random_extra_witness[..])).pack())
@@ -856,6 +905,7 @@ pub const IDENTITY_FLAGS_BITCOIN: u8 = 4;
 pub const IDENTITY_FLAGS_DOGECOIN: u8 = 5;
 pub const IDENTITY_FLAGS_MULTISIG: u8 = 6;
 pub const IDENTITY_FLAGS_ETHEREUM_DISPLAYING: u8 = 18;
+pub const IDENTITY_FLAGS_SOLANA: u8 = 19;
 
 pub const IDENTITY_FLAGS_OWNER_LOCK: u8 = 0xFC;
 pub const IDENTITY_FLAGS_EXEC: u8 = 0xFD;
@@ -973,7 +1023,7 @@ pub trait ChainConfig {
     fn sign(&self, privkey: &Privkey, message: CkbH256) -> Bytes;
 }
 
-pub fn use_chain_confg(flags: u8) -> bool {
+pub fn use_chain_config(flags: u8) -> bool {
     flags == IDENTITY_FLAGS_ETHEREUM
         || flags == IDENTITY_FLAGS_EOS
         || flags == IDENTITY_FLAGS_TRON
@@ -1257,6 +1307,9 @@ pub struct TestConfig {
     pub cobuild_message: Option<Message>,
     pub custom_extension_witnesses: Option<Vec<Bytes>>,
     pub custom_extension_witnesses_beginning: Option<Vec<Bytes>>,
+    pub random_tx: bool,
+    pub solana_secret_key: [u8; 32],
+    pub solana_phantom_sig: Option<Vec<u8>>,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -1278,6 +1331,8 @@ pub enum TestScheme {
     OwnerLockWithoutWitness,
 
     RsaWrongSignature,
+    SolanaWrongSignature,
+    SolanaWrongPubkey,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -1355,6 +1410,9 @@ impl TestConfig {
             cobuild_message: Some(Message::default()),
             custom_extension_witnesses: None,
             custom_extension_witnesses_beginning: None,
+            random_tx: true,
+            solana_secret_key: [0u8; 32],
+            solana_phantom_sig: None,
         }
     }
 
@@ -1636,13 +1694,16 @@ pub fn generate_rce_cell(
     mut tx_builder: TransactionBuilder,
     rc_data: Vec<Bytes>,
     smt_in_input: bool,
+    config: &TestConfig,
 ) -> (Byte32, TransactionBuilder) {
     let mut rng = thread_rng();
     let mut cell_vec_builder = RCCellVecBuilder::default();
 
     for rc_rule in rc_data {
         let mut random_args: [u8; 32] = Default::default();
-        rng.fill(&mut random_args[..]);
+        if config.random_tx {
+            rng.fill(&mut random_args[..]);
+        }
         // let's first build the RCE cell which contains the RCData(RCRule/RCCellVec).
         let (b0, rce_script) =
             build_script(dummy, tx_builder, true, smt_in_input, &rc_rule, Bytes::copy_from_slice(random_args.as_ref()));
@@ -1658,7 +1719,9 @@ pub fn generate_rce_cell(
     let rce_cell_content = RCDataBuilder::default().set(RCDataUnion::RCCellVec(cell_vec)).build();
 
     let mut random_args: [u8; 32] = Default::default();
-    rng.fill(&mut random_args[..]);
+    if config.random_tx {
+        rng.fill(&mut random_args[..]);
+    }
 
     let bin = rce_cell_content.as_slice();
 

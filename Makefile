@@ -24,7 +24,7 @@ CLANG_FORMAT_DOCKER := xujiandong/ckb-riscv-llvm-toolchain@sha256:6409ab0d3e335c
 all: build/omni_lock build/always_success
 
 all-via-docker:
-	docker run --rm -v `pwd`:/code ${BUILDER_DOCKER} bash -c "cd /code && make"
+	docker run -u $(shell id -u):$(shell id -g) --rm -v `pwd`:/code ${BUILDER_DOCKER} bash -c "cd /code && make"
 
 build/always_success: c/always_success.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
@@ -44,6 +44,15 @@ $(SECP256K1_SRC):
 		./autogen.sh && \
 		CC=$(CC) LD=$(LD) ./configure --enable-ecmult-static-precomputation --with-ecmult-window=6 --enable-module-recovery --host=$(TARGET) && \
 		make src/ecmult_static_pre_context.h src/ecmult_static_context.h
+
+build/ed25519/%.o: deps/ed25519/src/%.c
+	mkdir -p build/ed25519
+	$(CC) -c -DCKB_DECLARATION_ONLY -I deps/ed25519/src $(CFLAGS) -o $@ $^
+
+build/libed25519.a: build/ed25519/sign.o build/ed25519/verify.o build/ed25519/sha512.o build/ed25519/sc.o build/ed25519/keypair.o \
+					build/ed25519/key_exchange.o build/ed25519/ge.o build/ed25519/fe.o build/ed25519/add_scalar.o
+	$(AR) cr $@ $^
+
 
 ALL_C_SOURCE := $(wildcard c/omni_lock.c c/omni_lock_acp.h c/omni_lock_time_lock.h \
 	tests/omni_lock/omni_lock_sim.c tests/omni_lock/ckb_syscall_omni_lock_sim.h tests/omni_lock/omni_lock_supply.h\
@@ -72,8 +81,8 @@ omni_lock_mol:
 
 build/omni_lock: c/omni_lock.c c/omni_lock_supply.h c/omni_lock_acp.h build/secp256k1_data_info.h $(SECP256K1_SRC) \
 				c/ckb_identity.h c/mol2_utils.h c/cobuild_basic_mol2.h c/molecule2_verify.h \
-				c/cobuild.h c/mol2_utils.h c/molecule2_verify.h
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+				c/cobuild.h c/mol2_utils.h c/molecule2_verify.h build/libed25519.a
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< build/libed25519.a
 	cp $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
@@ -88,8 +97,10 @@ cobuild_mol:
 clean: clean2
 	rm -rf build/secp256k1_data_info.h build/dump_secp256k1_data
 	rm -f build/secp256k1_data
+	rm -rf build/ed25519 build/libed25519.a 
 	cd deps/secp256k1 && [ -f "Makefile" ] && make clean
 
+# not clean libraries, e.g. secp256k1
 clean2:
 	rm -rf build/*.debug
 	rm -f build/omni_lock

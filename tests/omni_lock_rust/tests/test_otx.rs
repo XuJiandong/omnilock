@@ -86,7 +86,12 @@ impl Verifier {
             let str = format!("Script({})", hex::encode(&script.as_slice()[..4]));
             println!("{}: {}", str, msg);
         });
-        verifier.verify(u64::MAX)
+        let result = verifier.verify(u64::MAX);
+        if result.is_ok() {
+            let cycles = (*result.as_ref().unwrap() as f64) / 1024.0 / 1024.0;
+            println!("cycles = {:.1} M ", cycles);
+        }
+        result
     }
 }
 
@@ -1202,7 +1207,8 @@ fn test_cobuild_otx_prefix_and_suffix() {
     let tx = tx_builder.build();
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
+    let cycles = verifier.verify(&tx, &dl).unwrap();
+    assert!(cycles < 5_000_000);
 }
 
 #[test]
