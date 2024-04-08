@@ -7,8 +7,10 @@ CFLAGS := -g -fPIC -O3 -fno-builtin \
 		-nostdinc -nostdlib -nostartfiles -fvisibility=hidden -fdata-sections -ffunction-sections \
 		-I deps/secp256k1/src -I deps/secp256k1 -I deps/ckb-c-stdlib -I deps/ckb-c-stdlib/libc \
 		-I deps/ckb-c-stdlib/molecule -I c -I build -I deps/sparse-merkle-tree/c \
-		-Wall -Werror -Wno-nonnull -Wno-nonnull-compare -Wno-unused-function -Wno-array-bounds -Wno-stringop-overflow \
-		-DCKB_C_STDLIB_PRINTF -DCKB_C_STDLIB_PRINTF_BUFFER_SIZE=1024
+		-Wall -Werror -Wno-nonnull -Wno-nonnull-compare -Wno-unused-function -Wno-array-bounds -Wno-stringop-overflow
+
+# to enable log
+# -DCKB_C_STDLIB_PRINTF -DCKB_C_STDLIB_PRINTF_BUFFER_SIZE=1024
 
 LDFLAGS := -nostdlib -nostartfiles -Wl,-static -Wl,--gc-sections
 
