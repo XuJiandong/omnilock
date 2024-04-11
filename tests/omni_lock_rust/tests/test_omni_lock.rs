@@ -764,6 +764,40 @@ fn test_solana_unlock() {
 }
 
 #[test]
+fn test_solana_wrong_auth() {
+    let mut data_loader = DummyDataLoader::new();
+
+    let mut config = TestConfig::new(IDENTITY_FLAGS_SOLANA, false);
+    config.solana_secret_key = [0x01u8; 32];
+    config.sig_len = 96;
+
+    let signing_key = SigningKey::from_bytes(&config.solana_secret_key);
+    let verifying_key = signing_key.verifying_key();
+    let blake160 = blake160(&verifying_key.to_bytes());
+    let mut blake160: Vec<u8> = blake160.into();
+    blake160[0] ^= 0x01;
+    let blake160: Bytes = blake160.into();
+    let auth = Identity {
+        flags: IDENTITY_FLAGS_SOLANA,
+        blake160,
+    };
+    config.id = auth;
+
+    let tx = gen_tx(&mut data_loader, &mut config);
+    let tx = sign_tx(&mut data_loader, tx, &mut config);
+    let resolved_tx = build_resolved_tx(&data_loader, &tx);
+
+    let consensus = misc::gen_consensus();
+    let tx_env = misc::gen_tx_env();
+    let mut verifier =
+        TransactionScriptsVerifier::new(&resolved_tx, &consensus, &data_loader, &tx_env);
+
+    verifier.set_debug_printer(debug_printer);
+    let verify_result = verifier.verify(MAX_CYCLES);
+    assert_script_error(verify_result.unwrap_err(), ERROR_PUBKEY_BLAKE160_HASH);
+}
+
+#[test]
 fn test_solana_wrong_pubkey() {
     let mut data_loader = DummyDataLoader::new();
 
