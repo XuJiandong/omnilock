@@ -676,6 +676,7 @@ int convert_tron_message(const uint8_t *msg, size_t msg_len, uint8_t *new_msg,
 }
 
 bool is_lock_script_hash_present(uint8_t *lock_script_hash) {
+  printf("is_lock_script_hash_present");
   int err = 0;
   size_t i = 0;
   while (true) {
@@ -691,10 +692,12 @@ bool is_lock_script_hash_present(uint8_t *lock_script_hash) {
     }
 
     if (memcmp(lock_script_hash, buff, BLAKE160_SIZE) == 0) {
+      printf("owner lock found");
       return true;
     }
     i += 1;
   }
+  printf("owner lock not found");
   return false;
 }
 

@@ -10,7 +10,7 @@ CFLAGS := -g -fPIC -O3 -fno-builtin \
 		-Wall -Werror -Wno-nonnull -Wno-nonnull-compare -Wno-unused-function -Wno-array-bounds -Wno-stringop-overflow
 
 # to enable log
-# -DCKB_C_STDLIB_PRINTF -DCKB_C_STDLIB_PRINTF_BUFFER_SIZE=1024
+CFLAGS += -DCKB_C_STDLIB_PRINTF -DCKB_C_STDLIB_PRINTF_BUFFER_SIZE=1024
 
 LDFLAGS := -nostdlib -nostartfiles -Wl,-static -Wl,--gc-sections
 
