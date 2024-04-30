@@ -274,7 +274,7 @@ fn test_pubkey_hash_emergency_halt_mode() {
 }
 
 #[test]
-fn test_rsa_via_exec_unlock() {
+fn test_via_exec_unlock() {
     let mut data_loader = DummyDataLoader::new();
 
     let mut config = TestConfig::new(IDENTITY_FLAGS_EXEC, false);

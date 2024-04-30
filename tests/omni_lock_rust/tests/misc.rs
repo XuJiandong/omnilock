@@ -591,6 +591,7 @@ pub fn sign_tx_by_input_group(
                     )
                 } else if config.id.flags == IDENTITY_FLAGS_EXEC {
                     let script = build_always_success_script();
+                    // always success script is used here. Anything is OK.
                     let hash = blake160(&[0u8; 20]);
                     let preimage = gen_exec_preimage(&script, &hash);
                     preimage_hash = blake160(preimage.as_ref());
