@@ -577,10 +577,26 @@ pub fn sign_tx_by_input_group(
                         sig = wrong_sig;
                     }
                     let hash = blake160(pubkey.as_ref());
-                    let preimage = gen_exec_preimage(&config.rsa_script, &hash);
+                    let preimage = gen_dl_preimage(&config.rsa_script, &hash);
                     preimage_hash = blake160(preimage.as_ref());
 
                     let sig_bytes = Bytes::from(sig);
+                    gen_witness_lock(
+                        sig_bytes,
+                        config.use_rc,
+                        config.use_rc_identity,
+                        &proof_vec,
+                        &identity,
+                        Some(preimage),
+                    )
+                } else if config.id.flags == IDENTITY_FLAGS_EXEC {
+                    let script = build_always_success_script();
+                    // always success script is used here. Anything is OK.
+                    let hash = blake160(&[0u8; 20]);
+                    let preimage = gen_exec_preimage(&script, &hash);
+                    preimage_hash = blake160(preimage.as_ref());
+
+                    let sig_bytes = Bytes::from(vec![0u8; 65]);
                     gen_witness_lock(
                         sig_bytes,
                         config.use_rc,
@@ -696,7 +712,13 @@ pub fn sign_tx_by_input_group(
         signed_witnesses.push(tx.witnesses().get(i).unwrap());
     }
     if preimage_hash.len() == 20 {
-        write_back_preimage_hash(dummy, IDENTITY_FLAGS_DL, preimage_hash);
+        if config.id.flags == IDENTITY_FLAGS_DL {
+            write_back_preimage_hash(dummy, IDENTITY_FLAGS_DL, preimage_hash);
+        } else if config.id.flags == IDENTITY_FLAGS_EXEC {
+            write_back_preimage_hash(dummy, IDENTITY_FLAGS_EXEC, preimage_hash);
+        } else {
+            panic!("preimage_hash");
+        }
     }
 
     match &config.custom_extension_witnesses_beginning {
@@ -1679,7 +1701,7 @@ pub fn gen_zero_witness_lock(
     res.freeze()
 }
 
-pub fn gen_exec_preimage(script: &Script, blake160: &Bytes) -> Bytes {
+pub fn gen_dl_preimage(script: &Script, blake160: &Bytes) -> Bytes {
     let mut result = BytesMut::new();
     result.put_slice(script.code_hash().as_slice());
     result.put_slice(script.hash_type().as_slice());
@@ -1687,6 +1709,23 @@ pub fn gen_exec_preimage(script: &Script, blake160: &Bytes) -> Bytes {
 
     result.freeze()
 }
+
+// code hash: 32 bytes
+// hash type: 1 byte
+// place: 1 byte
+// bounds: 8 bytes
+// pubkey hash: 20 bytes
+pub fn gen_exec_preimage(script: &Script, blake160: &Bytes) -> Bytes {
+    let mut result = BytesMut::new();
+    result.put_slice(script.code_hash().as_slice());
+    result.put_slice(script.hash_type().as_slice());
+    result.put_slice(&[0u8; 1]);
+    result.put_slice(&[0u8; 8]);
+    result.put_slice(blake160.clone().as_ref());
+
+    result.freeze()
+}
+
 // first generate N RCE cells with each contained one RCRule
 // then collect all these RCE cell hash and create the final RCE cell.
 pub fn generate_rce_cell(
